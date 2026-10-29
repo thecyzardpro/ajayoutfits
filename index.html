@@ -3215,3 +3215,55 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
  window.addEventListener('storage',e=>{if(e.key&&e.key.startsWith('ao_customer_order_notices_v3_'))sync()});document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync()});window.addEventListener('focus',sync);setInterval(sync,800);sync();
 })();
 </script>
+
+
+<!-- Ajay Outfits: single staff notification entry point; preserve existing notification data and styling -->
+<style id="ao-single-staff-notification-bell-fix">
+  /* Staff use the single header bell; the dashboard drawer must not render a second bell. */
+  #aoStaffNotificationBell { display:none !important; }
+  #aoSellerTopBell { flex:0 0 auto; }
+  #aoSellerTopBell .ao-notify-count { pointer-events:none; }
+</style>
+<script id="ao-single-staff-notification-bell-fix-script">
+(()=>{
+  'use strict';
+  const $all=(s)=>Array.from(document.querySelectorAll(s));
+  const isStaff=()=>{
+    try {
+      if(typeof window.aoIsAdmin==='function' && window.aoIsAdmin()) return true;
+      if(typeof window.aoCanSell==='function' && window.aoCanSell()) return true;
+    } catch(_) {}
+    try {
+      const raw=localStorage.getItem('ao_user')||localStorage.getItem('currentUser')||localStorage.getItem('user');
+      if(raw){const u=JSON.parse(raw);const role=String(u?.role||u?.user_role||u?.accountType||'').toLowerCase();if(['admin','seller','vendor'].includes(role))return true;}
+    } catch(_) {}
+    return false;
+  };
+  let queued=false;
+  function clean(){
+    queued=false;
+    const staff=isStaff();
+    if(staff){
+      // The top header bell is the one canonical entry point for staff notifications.
+      const top=$all('#aoSellerTopBell');
+      top.slice(1).forEach(el=>el.remove());
+      $all('#aoStaffNotificationBell').forEach(el=>{el.setAttribute('aria-hidden','true');el.tabIndex=-1;el.style.display='none';});
+      // Do not let the customer notification centre create a second bell for staff accounts.
+      $all('#aoCustomerTopBell,[data-ao-customer-notification-bell]').forEach(el=>el.remove());
+      // Keep any duplicate customer notification modal from appearing in staff context.
+      $all('#aoCustomerNotificationsModal').forEach(el=>el.remove());
+    } else {
+      // For customers, remove only staff top bells if they were left by a prior role/session.
+      $all('#aoSellerTopBell').forEach(el=>el.remove());
+      $all('#aoStaffNotificationBell').forEach(el=>el.remove());
+    }
+  }
+  function schedule(){if(queued)return;queued=true;requestAnimationFrame(clean);}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',schedule,{once:true});else schedule();
+  const observer=new MutationObserver(schedule);
+  observer.observe(document.documentElement,{subtree:true,childList:true});
+  window.addEventListener('storage',schedule);
+  window.addEventListener('focus',schedule);
+  document.addEventListener('click',e=>{if(e.target.closest('#aoDashboardOrders,#aoTopOrders,#aoMyOrdersButton,#adminLink,#sellerDashboardLink'))schedule();},true);
+})();
+</script>
