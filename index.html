@@ -1430,6 +1430,8 @@ async function hydrateAjayDataFromSupabase(){
   if(pr.data?.length)products=[...pr.data.map(r=>r.data).filter(Boolean)];
   if(or.data?.length)orders=or.data.map(r=>r.data).filter(Boolean);
   if(sr.data?.length)sellers=sr.data.map(r=>r.data).filter(Boolean);
+  // Notification baseline may only be captured after the first successful order hydration.
+  window.__aoInitialOrderHydrationComplete=true;
   write('products',products);write('orders',orders);write('sellers',sellers);
   refreshBrandOptions();refreshCategoryOptions();renderProducts();updateCounts();updateAdmin();renderSearchSuggestions();
  }catch(err){console.warn('Could not load catalogue data from Supabase:',err)}
@@ -2685,7 +2687,7 @@ html[data-theme="dark"] .ao-customer-notice{background:var(--panel);color:var(--
  const status=o=>String(o.status||o.orderStatus||'Order Received');
  const pay=o=>String(o.paymentStatus||o.payment_status||'Pending');
  const stateKey=o=>String(o.id||o.order_id||'')+'|'+status(o)+'|'+pay(o)+'|'+String(o.updatedAt||o.updated_at||'');
- const storeKey=()=>`ao_customer_order_notices_v2_${uid()}`;
+ const storeKey=()=>`ao_customer_order_notices_v3_${uid()}`;
  const read=()=>{try{return JSON.parse(localStorage.getItem(storeKey())||'{"baseline":false,"states":{},"unread":[]}')}catch(_){return {baseline:false,states:{},unread:[]}}};
  const save=d=>{try{localStorage.setItem(storeKey(),JSON.stringify(d))}catch(_){}};
  function setBadge(el,count){if(!el)return;let b=el.querySelector('.ao-customer-order-badge');if(!b){b=document.createElement('span');b.className='ao-customer-order-badge';b.setAttribute('aria-label','Unread order updates');el.appendChild(b)}b.textContent=count>99?'99+':String(count);b.hidden=count===0}
@@ -2761,7 +2763,7 @@ html[data-theme="dark"] .ao-live-order-toast{background:var(--panel,#202124);col
  function customerPoll(){if(!signed()||canSell()||isAdmin())return;const states={};let newOnes=[];for(const o of ordersNow()){const owner=String(o.customerUserId||o.user_id||o.customer_user_id||'');const email=String(o.email||o.customerEmail||'').toLowerCase();const u=current();if(!(owner&&u?.id&&owner===String(u.id))&&!(email&&email===String(u?.email||'').toLowerCase()))continue;const id=String(o.id||o.order_id||'');if(!id)continue;const st=String(o.status||o.orderStatus||'Order Received')+' / '+String(o.paymentStatus||o.payment_status||'Pending');states[id]=st;if(booted&&customerStates[id]!==undefined&&customerStates[id]!==st)newOnes.push({id,st});if(booted&&customerStates[id]===undefined)newOnes.push({id,st})}if(booted){newOnes.slice(0,3).forEach(o=>{const order=ordersNow().find(x=>String(x.id||x.order_id||'')===String(o.id))||{};const status=String(order.status||order.orderStatus||'Order Received');const payment=String(order.paymentStatus||order.payment_status||'Pending');toast('Your order update',`Order ${o.id} · ${status} · Payment ${payment}`,'customer')});}customerStates=states;}
  function staffPoll(){return; /* Staff toast is handled by the single seller/admin tray system below. */ try{const k=`ao_staff_notifications_v2_${uid()}_${isAdmin()?'admin':'seller'}`;const d=JSON.parse(localStorage.getItem(k)||'{}');const notices=d.notices||[];const unread=notices.filter(n=>!(d.seen||[]).includes(n.key));for(const n of unread){if(!staffSeen.has(n.key)){if(booted)toast(n.title||'New order update',n.detail||'There is new activity in your orders.','staff');staffSeen.add(n.key)}}for(const n of notices)staffSeen.add(n.key)}catch(_){}}
  // Mark the customer update as read as soon as its specific notice is opened.
- document.addEventListener('click',e=>{const b=e.target.closest('[data-ao-customer-notice]');if(!b)return;const id=String(b.dataset.aoCustomerNotice||'');try{const k=`ao_customer_order_notices_v2_${uid()}`,d=JSON.parse(localStorage.getItem(k)||'{}');d.unread=(d.unread||[]).filter(x=>!String(x).startsWith(id+'|'));localStorage.setItem(k,JSON.stringify(d));setTimeout(()=>window.aoRefreshCustomerOrderNotifications?.(),0)}catch(_){}});
+ document.addEventListener('click',e=>{const b=e.target.closest('[data-ao-customer-notice]');if(!b)return;const id=String(b.dataset.aoCustomerNotice||'');try{const k=`ao_customer_order_notices_v3_${uid()}`,d=JSON.parse(localStorage.getItem(k)||'{}');d.unread=(d.unread||[]).filter(x=>!String(x).startsWith(id+'|'));localStorage.setItem(k,JSON.stringify(d));setTimeout(()=>window.aoRefreshCustomerOrderNotifications?.(),0)}catch(_){}});
  // Dismissible toast opens the relevant notification center when clicked.
  document.addEventListener('click',e=>{const t=e.target.closest('.ao-live-order-toast');if(!t||e.target.closest('button'))return;if(canSell()||isAdmin())document.querySelector('#aoStaffNotificationBell,#aoSellerTopBell')?.click();else document.querySelector('#aoMyOrdersButton,#aoDashboardOrders,#aoTopOrders')?.click();t.remove()});
  setInterval(()=>{try{customerPoll();staffPoll();booted=true}catch(e){console.warn('Live notification toast refresh failed',e)}},1300);
@@ -2990,7 +2992,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .modalbox,html[data-theme=
  const ownOrder=o=>{const u=current();if(!u&&!(typeof profile!=='undefined'&&profile?.email))return false;const email=norm(u?.email||(typeof profile!=='undefined'&&profile?.email));const ids=[o.customerUserId,o.customer_user_id,o.user_id,o.userId,o.customer_id,o.customerId,o.profile_id,o.profileId].filter(v=>v!==undefined&&v!==null&&String(v).trim()!=='').map(String);const emails=[o.email,o.customerEmail,o.customer_email,o.user_email,o.customer?.email,o.profile?.email].filter(Boolean).map(norm);return !!((u?.id&&ids.includes(String(u.id)))||(email&&emails.includes(email)))};
  const idOf=o=>String(o.id||o.order_id||'');
  const stateOf=o=>JSON.stringify([String(o.status||o.orderStatus||'Order Received'),String(o.paymentStatus||o.payment_status||'Pending')]);
- const key=()=>`ao_customer_order_notices_v2_${uid()}`;
+ const key=()=>`ao_customer_order_notices_v3_${uid()}`;
  let lastDataSig='';
  function refreshCustomerState(){
   // Customer-only collector: persist unread notices when an owned order is first added
@@ -3003,6 +3005,8 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .modalbox,html[data-theme=
   const mine=allOrders().filter(ownOrder);
   let changed=false;
   if(!d.baseline){
+   // Wait for initial Supabase hydration; otherwise pre-existing orders can be misread as new.
+   if(!window.__aoInitialOrderHydrationComplete)return;
    for(const o of mine){const id=idOf(o);if(id)d.states[id]=stateOf(o)}
    d.baseline=true;changed=true;
   }else{
@@ -3122,7 +3126,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
  const all=()=>{try{return typeof orders!=='undefined'&&Array.isArray(orders)?orders:[]}catch(_){return []}};
  const norm=v=>String(v??'').trim().toLowerCase();
  const mine=o=>{const u=current(),email=norm(u?.email||(typeof profile!=='undefined'?profile?.email:''));const userIds=[o.customerUserId,o.customer_user_id,o.user_id,o.userId,o.customer_id,o.customerId,o.profile_id,o.profileId].filter(v=>v!==undefined&&v!==null&&String(v).trim()!=='').map(String);const emails=[o.email,o.customerEmail,o.customer_email,o.user_email,o.customer?.email,o.profile?.email].filter(Boolean).map(norm);return !!(signed()&&((u?.id&&userIds.includes(String(u.id)))||(email&&emails.includes(email))))};
- const storeKey=()=>`ao_customer_order_notices_v2_${uid()}`;
+ const storeKey=()=>`ao_customer_order_notices_v3_${uid()}`;
  const read=()=>{try{return JSON.parse(localStorage.getItem(storeKey())||'{"baseline":false,"states":{},"unread":[]}')}catch(_){return {baseline:false,states:{},unread:[]}}};
  const save=d=>{try{localStorage.setItem(storeKey(),JSON.stringify(d))}catch(_){}};
  const status=o=>String(o.status||o.orderStatus||'Order Received'), pay=o=>String(o.paymentStatus||o.payment_status||'Pending');
@@ -3151,6 +3155,6 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
  function open(){const m=ensureModal();renderList(m,items());m.classList.add('show')}
  document.addEventListener('click',e=>{if(e.target.closest('#aoMyOrdersButton,#aoDashboardOrders,#aoTopOrders'))setTimeout(sync,180)});
  const oldHydrate=window.hydrateAjayDataFromSupabase;if(typeof oldHydrate==='function'&&!oldHydrate.__aoCustomerBellWrapped){const wrapped=async function(...args){const r=await oldHydrate.apply(this,args);setTimeout(sync,0);return r};wrapped.__aoCustomerBellWrapped=true;window.hydrateAjayDataFromSupabase=wrapped}
- window.addEventListener('storage',e=>{if(e.key&&e.key.startsWith('ao_customer_order_notices_v2_'))sync()});document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync()});window.addEventListener('focus',sync);setInterval(sync,800);sync();
+ window.addEventListener('storage',e=>{if(e.key&&e.key.startsWith('ao_customer_order_notices_v3_'))sync()});document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync()});window.addEventListener('focus',sync);setInterval(sync,800);sync();
 })();
 </script>
