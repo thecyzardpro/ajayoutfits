@@ -1704,17 +1704,45 @@ function aoCanSell(){return !!(aoCurrentUser&&(aoCurrentRole==='seller'||aoCurre
 function aoUpdateRoleLinks(){const admin=$('#adminLink'),seller=$('#sellerDashboardLink');if(admin){admin.hidden=!aoIsAdmin();admin.setAttribute('aria-hidden',String(!aoIsAdmin()))}if(seller){seller.hidden=!aoCanSell();seller.setAttribute('aria-hidden',String(!aoCanSell()))}if(!aoIsAdmin())closeModal('adminModal');if(!aoCanSell())closeModal('sellerDashboardModal')}
 async function aoEnsureSignedIn(){if(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl()))return false;const db=window.ajaySupabase;if(!db){toast('Account services are not connected yet');await aoRefreshAuthUI();openModal('accountModal');return false}const {data:{session}}=await db.auth.getSession();if(!session?.user){await aoRefreshAuthUI();aoSetAuthMode('login');aoAuthMessage('Sign in to continue.','info');openModal('accountModal');return false}aoCurrentUser=session.user;return true}
 function renderSellerDashboard(){const host=$('#sellerDashListing');if(!host)return;const ownProducts=products.filter(p=>p.sellerUserId&&aoCurrentUser&&p.sellerUserId===aoCurrentUser.id || aoCanSell()&&p.seller===((aoCurrentRoleRow&&aoCurrentRoleRow.shop_name)||profile?.shopName||profile?.name));const shopName=(aoCurrentRoleRow&&aoCurrentRoleRow.shop_name)||(aoIsAdmin()?'Ajay Outfits':(profile?.shopName||profile?.name||'Your shop'));$('#sellerDashTitle').textContent=aoIsAdmin()?'Ajay Outfits · Seller studio':shopName;$('#sellerDashProducts').textContent=ownProducts.length;$('#sellerDashStock').textContent=ownProducts.reduce((n,p)=>n+Math.max(0,Number(p.stock??0)),0);const ownNames=new Set(ownProducts.map(p=>p.name));const ownOrders=orders.filter(o=>aoIsAdmin()||o.items?.some(i=>(i.sellerUserId&&aoCurrentUser&&i.sellerUserId===aoCurrentUser.id)||(!i.sellerUserId&&((i.sellerShopName||i.seller)===((aoCurrentRoleRow&&aoCurrentRoleRow.shop_name)||profile?.shopName||profile?.name)))||ownNames.has(i.name)||ownProducts.some(p=>String(p.id)===String(i.productId||i.id))));$('#sellerDashOrders').textContent=ownOrders.length;host.innerHTML=ownProducts.length?ownProducts.map(p=>`<div class="admin-row ao-seller-product-row"><img src="${safe(p.image||'https://placehold.co/80x90?text=AO')}" alt="" loading="lazy"><div><b>${safe(p.name)}</b><small>${safe(p.brand)} · ${money(p.price)} · Stock: ${Number(p.stock??0)} · ${safe(p.category)}</small><small>${safe(p.size||'One size')} · ${safe(p.condition||'New')}</small></div><button type="button" class="chip" data-seller-stock="${safe(p.id)}">Update stock</button></div>`).join(''):'<div class="admin-row">Your shop has no listings yet. Add your first product above.</div>';$('#sellerDashOrderList').innerHTML=ownOrders.length?ownOrders.map(o=>{const mine=(o.items||[]).filter(i=>(i.sellerUserId&&aoCurrentUser&&i.sellerUserId===aoCurrentUser.id)||(i.sellerUserId==null&&i.seller===((aoCurrentRoleRow&&aoCurrentRoleRow.shop_name)||profile?.shopName||profile?.name)));const subtotal=mine.length?mine.reduce((n,i)=>n+Math.max(1,Number(i.qty)||1)*Math.max(0,Number(i.price)||0),0):Number(o.total)||0;return `<div class="admin-row"><div><b>${safe(o.id)} · ${money(subtotal)}</b><small>Customer: ${safe(o.name||'Customer')} · ${safe(o.email||'')}</small><small>${safe(mine.map(i=>(i.name||'Item')+' × '+(Number(i.qty)||1)).join(', '))}</small><small>${safe(o.status||'Order received')} · ${safe(o.paymentStatus||'Pending')} · ${safe(o.paymentMethod||'Payment on delivery')}</small><small>${safe([o.address,o.city,o.country].filter(Boolean).join(', '))}</small></div></div>`}).join(''):'<div class="admin-row">No orders for your shop yet.</div>';}
-$('#sellBtn').addEventListener('click',async()=>{await aoLoadRole();if(aoCanSell()){renderSellerDashboard();openModal('sellerDashboardModal')}else{const already=aoCurrentUser&&sellers.find(v=>v.user_id===aoCurrentUser.id&&(v.status==='Pending review'||v.status==='Approved'));if(already){$('#sellerStatus').innerHTML=`<p>Your application status: <strong>${safe(already.status)}</strong>.</p>`;}else $('#sellerStatus').innerHTML='';openModal('sellerModal')}});
+$('#sellBtn').addEventListener('click',async()=>{await aoLoadRole();if(aoCanSell()){renderSellerDashboard();openModal('sellerDashboardModal')}else{$('#sellerStatus').innerHTML='';$('#sellerEmail').value=String(aoCurrentUser?.email||'');openModal('sellerModal')}});
 $('#sellerForm').addEventListener('submit',async e=>{
  e.preventDefault();if(!await aoEnsureSignedIn())return;await aoLoadRole();if(!aoCurrentUser?.id){toast('Please sign in again before submitting your application');return}if(aoCanSell()){closeModal('sellerModal');openModal('sellerDashboardModal');return}
- const existing=sellers.find(v=>String(v.user_id)===String(aoCurrentUser.id)&&(v.status==='Pending review'||v.status==='Approved'));
- if(existing){$('#sellerStatus').innerHTML=`<p>Your application status: <strong>${safe(existing.status)}</strong>. You can submit a new application after your current review is complete.</p>`;return}
  const db=window.ajaySupabase;if(!db){toast('Connect to your account before submitting a seller application');return}
- const createdAt=new Date().toISOString();const application={id:(window.crypto?.randomUUID?.()||('app-'+Date.now()+'-'+Math.random().toString(36).slice(2))),user_id:aoCurrentUser.id,name:$('#sellerName').value.trim(),shop_name:$('#sellerName').value.trim(),email:($('#sellerEmail').value||aoCurrentUser.email||'').trim(),type:$('#sellerType').value,status:'Pending review',created_at:createdAt};
- const {data:inserted,error:insertError}=await db.from('ao_seller_applications').insert({id:String(application.id),data:application,updated_at:createdAt}).select('id,data').single();
- if(insertError||!inserted?.data){console.error('Seller application insert failed:',insertError||'No row returned');toast('Application was not saved. Check Supabase INSERT policy and try again.');return}
- const savedApp=inserted.data;sellers=[...sellers.filter(v=>String(v.id)!==String(savedApp.id)),savedApp];write('sellers',sellers);window.__aoInitialSellerHydrationComplete=true;
- $('#sellerStatus').innerHTML='<p>Your application has been submitted. We will review it and update your account when a decision is made.</p>';e.target.reset();updateAdmin();try{window.aoRefreshSellerNotifications?.()}catch(_){}toast('Seller application submitted');
+ const accountEmail=String(aoCurrentUser.email||'').trim().toLowerCase();
+ const enteredEmail=String($('#sellerEmail').value||'').trim().toLowerCase();
+ if(!accountEmail){$('#sellerStatus').innerHTML='<p>We could not verify your account email. Please sign in again before applying.</p>';toast('Account email could not be verified');return}
+ if(!enteredEmail||enteredEmail!==accountEmail){$('#sellerStatus').innerHTML='<p>The contact email must match your signed-in account. To apply with another email, log in with that email first, then submit the application from that account.</p>';toast('Use the email address linked to your signed-in account');$('#sellerEmail').focus();return}
+ // Always check the database before allowing another request; local cache alone can be stale.
+ let userRows,emailRows;
+ try{
+  const byUser=await db.from('ao_seller_applications').select('id,data').eq('data->>user_id',String(aoCurrentUser.id));
+  if(byUser.error)throw byUser.error;
+  const byEmail=await db.from('ao_seller_applications').select('id,data').eq('data->>email',accountEmail);
+  if(byEmail.error)throw byEmail.error;
+  userRows=byUser.data||[];emailRows=byEmail.data||[];
+ }catch(err){console.error('Could not verify existing seller applications:',err);$('#sellerStatus').innerHTML='<p>We could not verify whether you already have an application. Please try again shortly.</p>';toast('Could not verify existing applications; no request was submitted');return}
+ const uniqueRows=[...new Map([...userRows,...emailRows].map(r=>[String(r.id),r])).values()];
+ const existingApps=uniqueRows.map(r=>({...((r&&r.data)||{}),id:String(r.id)}));
+ const active=existingApps.find(a=>['pending review','approved'].includes(String(a.status||'Pending review').trim().toLowerCase()));
+ if(active){
+  const approved=String(active.status||'').trim().toLowerCase()==='approved';
+  $('#sellerStatus').innerHTML=approved
+   ? '<p>This account has already been approved as a seller. You cannot submit another seller application.</p>'
+   : '<p>Your seller application is already submitted and is awaiting review. You cannot submit another application while it is pending.</p>';
+  toast(approved?'Seller application already approved':'Seller application already exists');
+  return;
+ }
+ // A previous Rejected application does not block a new application. Pending/Approved do.
+ const createdAt=new Date().toISOString();
+ const application={id:(window.crypto?.randomUUID?.()||('app-'+Date.now()+'-'+Math.random().toString(36).slice(2))),user_id:aoCurrentUser.id,name:$('#sellerName').value.trim(),shop_name:$('#sellerName').value.trim(),email:accountEmail,type:$('#sellerType').value,status:'Pending review',created_at:createdAt};
+ const submitButton=e.submitter||e.target.querySelector('button[type="submit"]');if(submitButton)submitButton.disabled=true;
+ try{
+  const {data:inserted,error:insertError}=await db.from('ao_seller_applications').insert({id:String(application.id),data:application,updated_at:createdAt}).select('id,data').single();
+  if(insertError||!inserted?.data){console.error('Seller application insert failed:',insertError||'No row returned');$('#sellerStatus').innerHTML='<p>Your application could not be submitted. Please try again or contact support if the problem continues.</p>';toast('Application was not saved. Check Supabase INSERT policy and try again.');return}
+  const savedApp={...inserted.data.data,id:String(inserted.data.id)};
+  sellers=[...sellers.filter(v=>String(v.id)!==String(savedApp.id)),savedApp];write('sellers',sellers);window.__aoInitialSellerHydrationComplete=true;
+  $('#sellerStatus').innerHTML='<p>Your seller application has been submitted successfully. We will notify you when the admin reviews it.</p>';e.target.reset();updateAdmin();try{window.aoRefreshSellerNotifications?.()}catch(_){}toast('Seller application submitted');
+ }finally{if(submitButton)submitButton.disabled=false}
 });
 async function aoReviewSeller(key,approve){
  if(!aoIsAdmin()){toast('Administrator access required');return}
@@ -2705,7 +2733,7 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
    const currentUser=(typeof aoCurrentUser!=='undefined'&&aoCurrentUser)||window.aoCurrentUser||null;
    const owns=String(a.user_id||'')===String(uid())||!!(a.email&&currentUser?.email&&String(a.email).toLowerCase()===String(currentUser.email).toLowerCase());
    if(!isAdmin()&&!owns)continue;
-   if(appBaseline&&isAdmin()&&(prev===undefined||(prev!==st&&st==='Pending review'))){
+   if(isAdmin()&&st.trim().toLowerCase()==='pending review'){
     const nk='application:'+id+':'+String(a.created_at||a.updated_at||st);
     if(!notices.some(n=>n.key===nk)&&!seen.has(nk)){notices.unshift({key:nk,kind:'application',target:'applications',sellerId:id,title:'New seller application',detail:`${a.shop_name||a.shopName||a.name||a.email||'A seller'} · ${st}`,time:now});changed=true;}
    }
@@ -3225,7 +3253,7 @@ html[data-theme="dark"] #aoOrdersModal [data-ao-order-card].ao-notification-targ
  window.addEventListener('ao:role-reset',()=>{root.classList.add('ao-role-chrome-transition');setTimeout(settleRole,0)});
 })();
 </script>
-<!-- AjayOutfits VERSION 34: seller decision persistence, realtime notification refresh, recipient-scoped notices, persistent read-state -->
+<!-- AjayOutfits VERSION 37: reliable pending seller application notices for admin bell, list, and unread badge -->
 </body></html>
 
 <style id="ao-realtime-password-and-notification-read-polish">
