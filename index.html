@@ -1456,7 +1456,7 @@ async function syncAjayDataToSupabase(){
   const jobs=[
    ...products.map(p=>db.from('ao_products').upsert({id:String(p.id),data:p,updated_at:new Date().toISOString()})),
    ...orders.map(o=>db.from('ao_orders').upsert({id:String(o.id),data:o,updated_at:new Date().toISOString()})),
-   ...sellers.map((v,i)=>db.from('ao_seller_applications').upsert({id:String(v.id||v.email||('seller-'+i)),data:v,updated_at:new Date().toISOString()}))
+   // Seller applications are written only by their dedicated submit/review/delete handlers.
   ];
   const results=await Promise.all(jobs);const failed=results.find(r=>r.error);
   if(failed)console.warn('Supabase sync needs database tables/policies configured:',failed.error.message);
@@ -1465,15 +1465,16 @@ async function syncAjayDataToSupabase(){
 async function hydrateAjayDataFromSupabase(){
  const db=window.ajaySupabase;if(!db)return;
  try{
+  // Load each table independently: an orders/products RLS issue must never block seller applications.
   const [pr,or,sr]=await Promise.all([
    db.from('ao_products').select('id,data'),db.from('ao_orders').select('id,data'),db.from('ao_seller_applications').select('id,data')
   ]);
-  if(pr.error||or.error||sr.error){console.warn('Supabase tables or policies are not ready yet. Configure them with the project SQL setup.',pr.error||or.error||sr.error);return}
-  if(pr.data?.length)products=[...pr.data.map(r=>r.data).filter(Boolean)];
-  if(or.data?.length)orders=or.data.map(r=>r.data).filter(Boolean);
-  if(sr.data?.length)sellers=sr.data.map(r=>r.data).filter(Boolean);
-  // Notification baseline may only be captured after the first successful order hydration.
-  window.__aoInitialOrderHydrationComplete=true;
+  if(pr.error)console.warn('Could not hydrate products:',pr.error.message);
+  else products=(pr.data||[]).map(r=>r.data).filter(Boolean);
+  if(or.error)console.warn('Could not hydrate orders:',or.error.message);
+  else {orders=(or.data||[]).map(r=>r.data).filter(Boolean);window.__aoInitialOrderHydrationComplete=true;}
+  if(sr.error)console.warn('Could not hydrate seller applications. Check ao_seller_applications SELECT RLS:',sr.error.message);
+  else {sellers=(sr.data||[]).map(r=>r.data).filter(Boolean);window.__aoInitialSellerHydrationComplete=true;}
   write('products',products);write('orders',orders);write('sellers',sellers);
   refreshBrandOptions();refreshCategoryOptions();renderProducts();updateCounts();updateAdmin();renderSearchSuggestions();
  }catch(err){console.warn('Could not load catalogue data from Supabase:',err)}
@@ -1491,7 +1492,7 @@ function aoSubscribeStoreRealtime(){
  aoStoreRealtimeChannel=db.channel('ao-store-live-data')
   .on('postgres_changes',{event:'*',schema:'public',table:'ao_products'},()=>aoQueueLiveHydrate())
   .on('postgres_changes',{event:'*',schema:'public',table:'ao_orders'},()=>aoQueueLiveHydrate())
-  .on('postgres_changes',{event:'*',schema:'public',table:'ao_seller_applications'},()=>{aoQueueLiveHydrate();setTimeout(()=>{aoLoadRole()},350)})
+  .on('postgres_changes',{event:'*',schema:'public',table:'ao_seller_applications'},payload=>{console.info('Seller application realtime event:',payload.eventType);aoQueueLiveHydrate();setTimeout(()=>{aoLoadRole()},350)})
   .on('postgres_changes',{event:'*',schema:'public',table:'ao_user_roles'},async()=>{try{await aoLoadRole()}catch(_){}aoQueueLiveHydrate()})
   .subscribe(status=>{if(status==='SUBSCRIBED')console.info('Ajay Outfits live data connected');else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status))console.warn('Ajay Outfits live data connection:',status);});
 }
@@ -1704,7 +1705,17 @@ function aoUpdateRoleLinks(){const admin=$('#adminLink'),seller=$('#sellerDashbo
 async function aoEnsureSignedIn(){if(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl()))return false;const db=window.ajaySupabase;if(!db){toast('Account services are not connected yet');await aoRefreshAuthUI();openModal('accountModal');return false}const {data:{session}}=await db.auth.getSession();if(!session?.user){await aoRefreshAuthUI();aoSetAuthMode('login');aoAuthMessage('Sign in to continue.','info');openModal('accountModal');return false}aoCurrentUser=session.user;return true}
 function renderSellerDashboard(){const host=$('#sellerDashListing');if(!host)return;const ownProducts=products.filter(p=>p.sellerUserId&&aoCurrentUser&&p.sellerUserId===aoCurrentUser.id || aoCanSell()&&p.seller===((aoCurrentRoleRow&&aoCurrentRoleRow.shop_name)||profile?.shopName||profile?.name));const shopName=(aoCurrentRoleRow&&aoCurrentRoleRow.shop_name)||(aoIsAdmin()?'Ajay Outfits':(profile?.shopName||profile?.name||'Your shop'));$('#sellerDashTitle').textContent=aoIsAdmin()?'Ajay Outfits · Seller studio':shopName;$('#sellerDashProducts').textContent=ownProducts.length;$('#sellerDashStock').textContent=ownProducts.reduce((n,p)=>n+Math.max(0,Number(p.stock??0)),0);const ownNames=new Set(ownProducts.map(p=>p.name));const ownOrders=orders.filter(o=>aoIsAdmin()||o.items?.some(i=>(i.sellerUserId&&aoCurrentUser&&i.sellerUserId===aoCurrentUser.id)||(!i.sellerUserId&&((i.sellerShopName||i.seller)===((aoCurrentRoleRow&&aoCurrentRoleRow.shop_name)||profile?.shopName||profile?.name)))||ownNames.has(i.name)||ownProducts.some(p=>String(p.id)===String(i.productId||i.id))));$('#sellerDashOrders').textContent=ownOrders.length;host.innerHTML=ownProducts.length?ownProducts.map(p=>`<div class="admin-row ao-seller-product-row"><img src="${safe(p.image||'https://placehold.co/80x90?text=AO')}" alt="" loading="lazy"><div><b>${safe(p.name)}</b><small>${safe(p.brand)} · ${money(p.price)} · Stock: ${Number(p.stock??0)} · ${safe(p.category)}</small><small>${safe(p.size||'One size')} · ${safe(p.condition||'New')}</small></div><button type="button" class="chip" data-seller-stock="${safe(p.id)}">Update stock</button></div>`).join(''):'<div class="admin-row">Your shop has no listings yet. Add your first product above.</div>';$('#sellerDashOrderList').innerHTML=ownOrders.length?ownOrders.map(o=>{const mine=(o.items||[]).filter(i=>(i.sellerUserId&&aoCurrentUser&&i.sellerUserId===aoCurrentUser.id)||(i.sellerUserId==null&&i.seller===((aoCurrentRoleRow&&aoCurrentRoleRow.shop_name)||profile?.shopName||profile?.name)));const subtotal=mine.length?mine.reduce((n,i)=>n+Math.max(1,Number(i.qty)||1)*Math.max(0,Number(i.price)||0),0):Number(o.total)||0;return `<div class="admin-row"><div><b>${safe(o.id)} · ${money(subtotal)}</b><small>Customer: ${safe(o.name||'Customer')} · ${safe(o.email||'')}</small><small>${safe(mine.map(i=>(i.name||'Item')+' × '+(Number(i.qty)||1)).join(', '))}</small><small>${safe(o.status||'Order received')} · ${safe(o.paymentStatus||'Pending')} · ${safe(o.paymentMethod||'Payment on delivery')}</small><small>${safe([o.address,o.city,o.country].filter(Boolean).join(', '))}</small></div></div>`}).join(''):'<div class="admin-row">No orders for your shop yet.</div>';}
 $('#sellBtn').addEventListener('click',async()=>{await aoLoadRole();if(aoCanSell()){renderSellerDashboard();openModal('sellerDashboardModal')}else{const already=aoCurrentUser&&sellers.find(v=>v.user_id===aoCurrentUser.id&&(v.status==='Pending review'||v.status==='Approved'));if(already){$('#sellerStatus').innerHTML=`<p>Your application status: <strong>${safe(already.status)}</strong>.</p>`;}else $('#sellerStatus').innerHTML='';openModal('sellerModal')}});
-$('#sellerForm').addEventListener('submit',async e=>{e.preventDefault();if(!await aoEnsureSignedIn())return;await aoLoadRole();if(aoCanSell()){closeModal('sellerModal');openModal('sellerDashboardModal');return}const existing=sellers.find(v=>v.user_id===aoCurrentUser.id&&(v.status==='Pending review'||v.status==='Approved'));if(existing){$('#sellerStatus').innerHTML=`<p>Your application status: <strong>${safe(existing.status)}</strong>. You can submit a new application after your current review is complete.</p>`;return}const application={id:(window.crypto?.randomUUID?.()||('app-'+Date.now()+'-'+Math.random().toString(36).slice(2))),user_id:aoCurrentUser.id,name:$('#sellerName').value.trim(),shop_name:$('#sellerName').value.trim(),email:$('#sellerEmail').value,type:$('#sellerType').value,status:'Pending review',created_at:new Date().toISOString()};sellers.push(application);write('sellers',sellers);await syncAjayDataToSupabase();$('#sellerStatus').innerHTML='<p>Your application has been submitted. We will review it and update your account when a decision is made.</p>';e.target.reset();updateAdmin();toast('Seller application submitted')});
+$('#sellerForm').addEventListener('submit',async e=>{
+ e.preventDefault();if(!await aoEnsureSignedIn())return;await aoLoadRole();if(!aoCurrentUser?.id){toast('Please sign in again before submitting your application');return}if(aoCanSell()){closeModal('sellerModal');openModal('sellerDashboardModal');return}
+ const existing=sellers.find(v=>String(v.user_id)===String(aoCurrentUser.id)&&(v.status==='Pending review'||v.status==='Approved'));
+ if(existing){$('#sellerStatus').innerHTML=`<p>Your application status: <strong>${safe(existing.status)}</strong>. You can submit a new application after your current review is complete.</p>`;return}
+ const db=window.ajaySupabase;if(!db){toast('Connect to your account before submitting a seller application');return}
+ const createdAt=new Date().toISOString();const application={id:(window.crypto?.randomUUID?.()||('app-'+Date.now()+'-'+Math.random().toString(36).slice(2))),user_id:aoCurrentUser.id,name:$('#sellerName').value.trim(),shop_name:$('#sellerName').value.trim(),email:($('#sellerEmail').value||aoCurrentUser.email||'').trim(),type:$('#sellerType').value,status:'Pending review',created_at:createdAt};
+ const {data:inserted,error:insertError}=await db.from('ao_seller_applications').insert({id:String(application.id),data:application,updated_at:createdAt}).select('id,data').single();
+ if(insertError||!inserted?.data){console.error('Seller application insert failed:',insertError||'No row returned');toast('Application was not saved. Check Supabase INSERT policy and try again.');return}
+ const savedApp=inserted.data;sellers=[...sellers.filter(v=>String(v.id)!==String(savedApp.id)),savedApp];write('sellers',sellers);window.__aoInitialSellerHydrationComplete=true;
+ $('#sellerStatus').innerHTML='<p>Your application has been submitted. We will review it and update your account when a decision is made.</p>';e.target.reset();updateAdmin();try{window.aoRefreshSellerNotifications?.()}catch(_){}toast('Seller application submitted');
+});
 async function aoReviewSeller(key,approve){
  if(!aoIsAdmin()){toast('Administrator access required');return}
  const app=sellers.find(v=>String(v.id||v.user_id||v.email)===String(key));if(!app)return;
@@ -1727,8 +1738,8 @@ $('#sellerDashboardLink').addEventListener('click',async e=>{e.preventDefault();
 $('#sellerProductForm').addEventListener('submit',async e=>{e.preventDefault();await aoLoadRole();if(!aoCanSell()){toast('Seller access required');return}const name=$('#sellerProductName').value.trim(),brand=$('#sellerProductBrand').value.trim(),price=Number($('#sellerProductPrice').value),stock=Number($('#sellerProductStock').value),file=$('#sellerProductImageFile')?.files?.[0];if(!name||!brand||!(price>0)||!Number.isInteger(stock)||stock<0){toast('Check product details and stock quantity');return}if(file&&(!/^image\/(png|jpeg|webp|gif)$/.test(file.type)||file.size>2.5*1024*1024)){toast('Choose PNG, JPG, WEBP or GIF up to 2.5 MB');return}const shop=(aoCurrentRoleRow&&aoCurrentRoleRow.shop_name)||(aoIsAdmin()?'Ajay Outfits':(profile?.shopName||profile?.name||'Your shop'));let image=$('#sellerProductImage').value.trim();if(file){image=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=()=>reject(new Error('Could not read the selected image'));r.readAsDataURL(file)}).catch(err=>{toast(err.message);return ''});if(!image)return}const p={id:'seller-'+aoCurrentUser.id+'-'+Date.now(),sellerUserId:aoCurrentUser.id,brand,name,category:$('#sellerProductCategory').value,price,size:$('#sellerProductSize').value.trim()||'One size',stock,condition:'New',tag:'Seller listing',seller:shop,image:image||'https://placehold.co/600x700/ecece5/171815?text=AJAY+OUTFITS',isNew:true,desc:$('#sellerProductDesc').value.trim()||'A new listing from '+shop+'.'};products.unshift(p);persist();refreshBrandOptions();refreshCategoryOptions();renderProducts();updateAdmin();e.target.reset();$('#sellerProductStock').value='1';renderSellerDashboard();toast('Product listing added')});
 $('#sellerDashListing').addEventListener('click',async e=>{const b=e.target.closest('[data-seller-stock]');if(!b)return;if(!aoCanSell())return;const p=productById(b.dataset.sellerStock);if(!p)return;const current=Math.max(0,Number(p.stock??0));const value=prompt('Enter new stock quantity:',String(current));if(value===null)return;const n=Number(value);if(!Number.isInteger(n)||n<0||n>100000){toast('Enter a whole number from 0 to 100000');return}p.stock=n;persist();renderSellerDashboard();renderProducts();toast('Stock updated')});
 // Role model: one database role per account. Admin includes seller capabilities without assigning a second role.
-window.addEventListener('ao:auth-change',()=>aoLoadRole());
-if(window.ajaySupabase){window.ajaySupabase.auth.onAuthStateChange((event)=>{if(event!=='SIGNED_OUT'&&(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl())))return;setTimeout(()=>{aoRefreshAuthUI();aoLoadRole()},0)});aoSubscribeStoreRealtime();}
+window.addEventListener('ao:auth-change',()=>{aoLoadRole();setTimeout(()=>aoSubscribeStoreRealtime(),180)});
+if(window.ajaySupabase){window.ajaySupabase.auth.onAuthStateChange((event)=>{if(event!=='SIGNED_OUT'&&(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl())))return;setTimeout(()=>{aoRefreshAuthUI();aoLoadRole();if(event==='SIGNED_IN')aoSubscribeStoreRealtime()},0)});aoSubscribeStoreRealtime();}
 aoLoadRole();
 
 let uploadedProductImage='';$('#newImageFile').addEventListener('change',e=>{const file=e.target.files&&e.target.files[0];uploadedProductImage='';$('#newImagePreview').hidden=true;$('#newImagePreview').innerHTML='';if(!file)return;if(!/^image\/(png|jpeg|webp|gif)$/.test(file.type)){e.target.value='';toast('Choose a PNG, JPG, WEBP or GIF image');return}if(file.size>2.5*1024*1024){e.target.value='';toast('Image is too large. Please use an image under 2.5 MB');return}const reader=new FileReader();reader.onload=()=>{const img=new Image();img.onload=()=>{try{const max=1200,scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);uploadedProductImage=canvas.toDataURL('image/jpeg',.82);$('#newImagePreview').innerHTML='<img alt="Product image preview" src="'+uploadedProductImage+'"><small>'+safe(file.name)+' · optimized for web</small>';$('#newImagePreview').hidden=false}catch(err){toast('Could not process this image file')}};img.onerror=()=>toast('This image could not be opened');img.src=String(reader.result||'')};reader.onerror=()=>toast('Could not read this image file');reader.readAsDataURL(file)});$('#addProductForm').addEventListener('submit',async e=>{e.preventDefault();if(!aoHasAdminRole()){toast('Administrator access required');return}let image=$('#newImage').value.trim()||'https://placehold.co/600x700/ecece5/171815?text=AJAY+OUTFITS';
@@ -2674,8 +2685,9 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
  const key=()=>`ao_staff_notifications_v3_${uid()}_${isAdmin()?'admin':'seller'}`;
  function read(){try{return JSON.parse(localStorage.getItem(key())||'{"baseline":false,"states":{},"notices":[],"seen":[]}')}catch(_){return {baseline:false,states:{},notices:[],seen:[]}}}
  function save(d){try{localStorage.setItem(key(),JSON.stringify(d))}catch(_){}}
- function collect(){const d=read(),states=d.states||{}, notices=d.notices||[], seen=new Set(d.seen||[]);let changed=false;const now=Date.now();
-  if(!window.__aoInitialOrderHydrationComplete)return d;
+ function collect(){const d=read(),states=d.states||{}, notices=d.notices||[], seen=new Set(d.seen||[]);let changed=false;const now=Date.now(),appsReady=!!window.__aoInitialSellerHydrationComplete;
+  const appBaseline=d.appBaseline===true||(d.baseline===true&&Object.keys(states).some(k=>k.startsWith('app:')));
+  if(!appsReady&&!window.__aoInitialOrderHydrationComplete)return d;
   // Clean legacy status-change notices that the older version incorrectly routed to staff.
   for(let i=notices.length-1;i>=0;i--){const n=notices[i];if(n?.kind!=='application')continue;if(n.title==='Seller application updated'||n.title==='Seller application status updated'){notices.splice(i,1);changed=true;continue;}if(!isAdmin()){const ownsNotice=allApps().some(a=>String(a.id||a.user_id||a.email||'')===String(n.sellerId||'')&&(String(a.user_id||'')===String(uid())||!!(a.email&&typeof aoCurrentUser!=='undefined'&&String(a.email).toLowerCase()===String(aoCurrentUser?.email||'').toLowerCase())));if(!ownsNotice){notices.splice(i,1);changed=true;}}}
 
@@ -2687,13 +2699,13 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
    const ownUpdate=actorId&&actorId===String(uid());
    if(prev===undefined){if(d.baseline&&!staffMadeUpdate&&!ownUpdate){const k='order:'+id+':'+st;if(!notices.some(n=>n.key===k)){notices.unshift({key:k,kind:'order',target:'orders',orderId:id,title:isAdmin()?'New customer order':'New order for your shop',detail:`Order ${id} · ${o.status||o.orderStatus||'Order Received'} · Payment ${o.paymentStatus||o.payment_status||'Pending'}`,time:now});changed=true}}states[id]=st;changed=true}
    else if(prev!==st){if(!staffMadeUpdate&&!ownUpdate){const k='order:'+id+':'+st;if(!notices.some(n=>n.key===k)){notices.unshift({key:k,kind:'order',target:'orders',orderId:id,title:'Order updated',detail:`Order ${id} · ${o.status||o.orderStatus||'Order Received'} · Payment ${o.paymentStatus||o.payment_status||'Pending'}`,time:now});changed=true}}states[id]=st;changed=true}}
-  for(const a of allApps()){
+  if(appsReady)for(const a of allApps()){
    const id=String(a.id||a.user_id||a.email||'');if(!id)continue;
    const st=String(a.status||'Pending review'),sk='app:'+id,prev=states[sk];
    const currentUser=(typeof aoCurrentUser!=='undefined'&&aoCurrentUser)||window.aoCurrentUser||null;
    const owns=String(a.user_id||'')===String(uid())||!!(a.email&&currentUser?.email&&String(a.email).toLowerCase()===String(currentUser.email).toLowerCase());
    if(!isAdmin()&&!owns)continue;
-   if(d.baseline&&isAdmin()&&(prev===undefined||(prev!==st&&st==='Pending review'))){
+   if(appBaseline&&isAdmin()&&(prev===undefined||(prev!==st&&st==='Pending review'))){
     const nk='application:'+id+':'+String(a.created_at||a.updated_at||st);
     if(!notices.some(n=>n.key===nk)&&!seen.has(nk)){notices.unshift({key:nk,kind:'application',target:'applications',sellerId:id,title:'New seller application',detail:`${a.shop_name||a.shopName||a.name||a.email||'A seller'} · ${st}`,time:now});changed=true;}
    }
@@ -2704,7 +2716,7 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
    }
    changed=true;
   }
-  if(!d.baseline){d.baseline=true;changed=true}const uniqueNotices=[];const noticeKeys=new Set();for(const n of notices){if(!n||!n.key||noticeKeys.has(n.key))continue;noticeKeys.add(n.key);uniqueNotices.push(n)}d.states=states;d.notices=uniqueNotices.slice(0,120);d.seen=[...seen].slice(-300);if(changed||uniqueNotices.length!==notices.length)save(d);return d;
+  if(!d.baseline){d.baseline=true;changed=true}if(appsReady&&!d.appBaseline){d.appBaseline=true;changed=true}const uniqueNotices=[];const noticeKeys=new Set();for(const n of notices){if(!n||!n.key||noticeKeys.has(n.key))continue;noticeKeys.add(n.key);uniqueNotices.push(n)}d.states=states;d.notices=uniqueNotices.slice(0,120);d.seen=[...seen].slice(-300);if(changed||uniqueNotices.length!==notices.length)save(d);return d;
  }
  function ensureModal(){let m=$('#aoSellerNotificationsModal');if(m)return m;m=document.createElement('div');m.className='modal';m.id='aoSellerNotificationsModal';m.innerHTML='<div class="modalbox ao-notifications-box" style="max-width:680px"><div class="drawer-head"><div><span class="eyebrow">AJAY OUTFITS</span><h2>Notifications</h2></div><button type="button" class="close" data-close="aoSellerNotificationsModal" aria-label="Close notifications">×</button></div><div class="ao-notification-toolbar"><p style="color:var(--muted)">Order arrivals, order status and payment changes, and seller application activity.</p><button type="button" id="aoStaffMarkAllRead" class="ao-mark-all-read" hidden>Mark all as read</button></div><div class="ao-notify-list" id="aoSellerNotificationList"></div></div>';document.body.appendChild(m);m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')});m.querySelector('[data-close]').addEventListener('click',()=>m.classList.remove('show'));return m}
  function openNotifications(){
