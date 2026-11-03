@@ -1930,7 +1930,7 @@ $('#showLogin').addEventListener('click',()=>aoSetAuthMode('login'));$('#showReg
 $('#authSwitchText').addEventListener('click',e=>{if(e.target.id==='authSwitch')aoSetAuthMode(aoAuthMode==='login'?'register':'login')});
 function aoAuthMessage(message,kind=''){const el=$('#accountStatus');el.textContent=message;el.dataset.kind=kind;}
 async function aoRefreshAuthUI(){if(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl())||((typeof aoIsEmailConfirmationReturn==='function')&&aoIsEmailConfirmationReturn()))return;const db=window.ajaySupabase;if(!db)return;try{const {data:{session}}=await db.auth.getSession();if(session?.user){profile={name:session.user.user_metadata?.full_name||session.user.email?.split('@')[0]||'',email:session.user.email||'',phone:session.user.user_metadata?.phone||''};$('#customerName').value=profile.name;$('#customerEmail').value=profile.email;$('#authHeading').textContent='You’re signed in.';$('#authIntro').textContent='Your Ajay Outfits account is ready.';$('#accountForm').hidden=true;$('#logoutBtn').hidden=false;const ordersBtn=document.getElementById('aoMyOrdersButton');if(ordersBtn){ordersBtn.hidden=false;ordersBtn.style.display='inline-flex'}aoAuthMessage('You are signed in to your account.','success');aoSyncTopAccount()}else{profile=null;aoSyncTopAccount();$('#accountForm').hidden=false;$('#logoutBtn').hidden=true;const ordersBtn=document.getElementById('aoMyOrdersButton');if(ordersBtn){ordersBtn.hidden=true;ordersBtn.style.display='none'}aoSetAuthMode('login')}}catch(err){console.warn('Could not read account session',err)}}
-function aoSyncTopAccount(){const box=document.getElementById('aoAccountActions'),btn=document.getElementById('accountBtn');if(!box||!btn)return;const signed=!!(window.ajaySupabase&&(window.aoCurrentUser?.id||profile?.email));box.hidden=!signed;btn.hidden=false;btn.style.removeProperty('display');btn.setAttribute('aria-label',signed?'Account overview':'Sign in or create an account');btn.title=signed?'Account overview':'Sign in or create an account';const orders=document.getElementById('aoTopOrders');if(orders){const staff=(typeof aoIsAdmin==='function'&&aoIsAdmin())||(typeof aoCanSell==='function'&&aoCanSell());orders.setAttribute('aria-label',staff?'Customer Orders':'My Orders');orders.title=staff?'Customer Orders':'My Orders'}}
+function aoSyncTopAccount(){const box=document.getElementById('aoAccountActions'),btn=document.getElementById('accountBtn');if(!box||!btn)return;const signed=!!(window.ajaySupabase&&(window.aoCurrentUser?.id||profile?.email));box.hidden=!signed;btn.hidden=false;btn.style.removeProperty('display');btn.setAttribute('aria-label',signed?'Account overview':'Sign in or create an account');btn.title=signed?'Account overview':'Sign in or create an account';const orders=document.getElementById('aoTopOrders');if(orders){const admin=typeof aoIsAdmin==='function'&&aoIsAdmin();orders.setAttribute('aria-label',admin?'Customer Orders':'My Orders');orders.title=admin?'Customer Orders':'My Orders'}}
 document.getElementById('aoTopOrders')?.addEventListener('click',()=>{const b=document.getElementById('aoMyOrdersButton');if(b)b.click();else openModal('aoOrdersModal')});
 document.getElementById('aoTopSignOut')?.addEventListener('click',()=>document.getElementById('logoutBtn')?.click());
 $('#accountBtn').addEventListener('click',async()=>{await aoOpenAccountDashboard()});
@@ -3334,10 +3334,54 @@ body.ao-dashboard-page-mode{overflow:hidden}body.ao-dashboard-page-mode>.wrap,bo
  window.aoOpenSellerDashboardPage=()=>openPage('seller');
  function openOrdersPage(){if(typeof aoLoadRole==='function')return aoLoadRole().then(async()=>{try{if(typeof hydrateAjayDataFromSupabase==='function')await hydrateAjayDataFromSupabase()}catch(err){console.warn('Could not refresh orders',err)}const staff=(typeof aoIsAdmin==='function'&&aoIsAdmin())||(typeof aoCanSell==='function'&&aoCanSell());if(!staff){if(typeof openModal==='function')openModal('aoOrdersModal');return;}if(activePage)closePage(true);const page=ensurePage();const content=$('#aoStandaloneContent');const orderHostId=(typeof aoIsAdmin==='function'&&aoIsAdmin())?'aoAdminOrdersLive':'aoSellerOrdersLive';content.innerHTML='<section class="ao-orders-workspace"><span class="eyebrow">AJAY OUTFITS · ORDER CENTRE</span><h2 style="margin:8px 0">Customer Orders</h2><p style="color:var(--muted)">Track active orders, update fulfilment and payment status, and access receipts for completed orders. Removing a delivered order only hides it from this browser; it remains in Supabase.</p><div id="'+orderHostId+'" class="admin-list"></div></section>';movedBox=null;originalParent=null;activePage='orders';$('#aoStandaloneTitle').textContent='Customer Orders';$('#aoStandaloneSubtitle').textContent='Active orders, delivered orders and receipts.';page.classList.add('show');document.body.classList.add('ao-dashboard-page-mode');history.pushState({aoPage:'orders'},'', '#ao-page-orders');if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();});}
  window.aoOpenCustomerOrdersPage=openOrdersPage;
- document.addEventListener('click',e=>{const admin=e.target.closest('#adminLink'),seller=e.target.closest('#sellerDashboardLink'),cart=e.target.closest('#cartBtn'),topOrders=e.target.closest('#aoTopOrders'),accountOrders=e.target.closest('#aoDashboardOrders');const staff=(typeof aoIsAdmin==='function'&&aoIsAdmin())||(typeof aoCanSell==='function'&&aoCanSell());if((topOrders||accountOrders)&&staff){e.preventDefault();e.stopImmediatePropagation();openOrdersPage();return;}if(admin){e.preventDefault();e.stopImmediatePropagation();openPage('admin');return;}if(seller){e.preventDefault();e.stopImmediatePropagation();openPage('seller');return;}if(cart&&staff){e.preventDefault();e.stopImmediatePropagation();openOrdersPage();}},true);
+ document.addEventListener('click',e=>{const admin=e.target.closest('#adminLink'),seller=e.target.closest('#sellerDashboardLink'),cart=e.target.closest('#cartBtn'),topOrders=e.target.closest('#aoTopOrders'),accountOrders=e.target.closest('#aoDashboardOrders');const staff=(typeof aoIsAdmin==='function'&&aoIsAdmin())||(typeof aoCanSell==='function'&&aoCanSell());if((topOrders||accountOrders)&&staff){e.preventDefault();e.stopImmediatePropagation();openOrdersPage();return;}if(admin){e.preventDefault();e.stopImmediatePropagation();openPage('admin');return;}if(seller){e.preventDefault();e.stopImmediatePropagation();openPage('seller');return;}if(cart&&staff){e.preventDefault();e.stopImmediatePropagation();return;}},true);
  document.addEventListener('click',e=>{const sell=e.target.closest('#footerSell,[data-editorial="seller"]');if(!sell)return;e.preventDefault();e.stopImmediatePropagation();(async()=>{await aoLoadRole();if(aoCanSell()){openPage('seller');return;}const m=$('#sellerModal');if(m){$('#sellerStatus').innerHTML='';openModal('sellerModal');}})();},true);
- function applyRoleChrome(){const staff=(typeof aoIsAdmin==='function'&&aoIsAdmin())||(typeof aoCanSell==='function'&&aoCanSell());const cart=$('#cartBtn'),wish=$('#wishBtn');if(cart){if(staff){cart.innerHTML='<span aria-hidden="true" style="font-size:19px"><svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 3.5h9l3 3V21H6z"/><path d="M15 3.5V7h3M9 11h6M9 14.5h6M9 18h4"/></svg></span><span class="count" id="cartCount" style="display:none">0</span>';cart.setAttribute('aria-label','Customer Orders');cart.title='Customer Orders';cart.dataset.adminOrdersMode='1';}else if(cart.dataset.adminOrdersMode==='1'){cart.innerHTML='<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M2 3h2l2.6 12.2a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6L22 7H5"/></svg><span class="count" id="cartCount">0</span>';cart.setAttribute('aria-label','Shopping cart');cart.title='Shopping cart';delete cart.dataset.adminOrdersMode;}}if(wish)wish.hidden=staff;document.querySelectorAll('#addToCart,#buyNow,[data-add-cart],.add-to-cart,.heart').forEach(b=>{if(staff){b.hidden=true;b.setAttribute('aria-hidden','true')}else{b.hidden=false;b.removeAttribute('aria-hidden')}});['#aoDashboardCart','#aoDashboardWishlist'].forEach(sel=>{const el=$(sel);if(el)el.hidden=staff;});const label=$('#aoMyOrdersButton');if(label)label.textContent=staff?'Customer Orders & receipts':'My Orders & receipts';const accountOrderLabel=$('#aoDashboardOrders b');if(accountOrderLabel)accountOrderLabel.textContent=staff?'Customer Orders':'My Orders';const topOrderLabel=$('#aoTopOrders');if(topOrderLabel){topOrderLabel.setAttribute('aria-label',staff?'Customer Orders':'My Orders');topOrderLabel.title=staff?'Customer Orders':'My Orders';}const customerHeading=$('#aoOrdersModal .drawer-head h2');if(customerHeading)customerHeading.textContent=staff?'Customer Orders':'My Orders';}
- const prevRoleLinks=window.aoUpdateRoleLinks;window.aoUpdateRoleLinks=function(){if(typeof prevRoleLinks==='function')prevRoleLinks();applyRoleChrome();};
+ function applyRoleChrome(){
+  const admin=typeof aoIsAdmin==='function'&&aoIsAdmin();
+  const seller=typeof aoCanSell==='function'&&aoCanSell();
+  const staff=admin||seller;
+  const cart=$('#cartBtn'),wish=$('#wishBtn'),topOrders=$('#aoTopOrders');
+  const accountOrders=$('#aoDashboardOrders');
+
+  // A single header order shortcut: Admin gets Customer Orders, customers get My Orders.
+  // Non-admin sellers use their Seller Dashboard order workspace, so no extra order icon.
+  if(cart){
+    cart.hidden=staff;
+    cart.setAttribute('aria-hidden',staff?'true':'false');
+    cart.setAttribute('aria-label','Shopping cart');
+    cart.title='Shopping cart';
+    delete cart.dataset.adminOrdersMode;
+    if(!staff&&!cart.querySelector('#cartCount')){
+      cart.innerHTML='<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M2 3h2l2.6 12.2a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6L22 7H5"/></svg><span class="count" id="cartCount">0</span>';
+    }
+  }
+  if(wish){wish.hidden=staff;wish.setAttribute('aria-hidden',staff?'true':'false');}
+  if(topOrders){
+    const showOrders=admin||!staff;
+    topOrders.hidden=!showOrders;
+    topOrders.setAttribute('aria-hidden',showOrders?'false':'true');
+    topOrders.setAttribute('aria-label',admin?'Customer Orders':'My Orders');
+    topOrders.title=admin?'Customer Orders':'My Orders';
+  }
+  if(accountOrders){
+    accountOrders.hidden=staff&&!admin;
+    const b=accountOrders.querySelector('b');
+    if(b)b.textContent=admin?'Customer Orders':'My Orders';
+    const small=accountOrders.querySelector('small');
+    if(small)small.textContent='Orders and receipts';
+  }
+  document.querySelectorAll('#addToCart,#buyNow,[data-add-cart],.add-to-cart,.heart').forEach(b=>{
+    if(staff){b.hidden=true;b.setAttribute('aria-hidden','true')}
+    else{b.hidden=false;b.removeAttribute('aria-hidden')}
+  });
+  ['#aoDashboardCart','#aoDashboardWishlist'].forEach(sel=>{
+    const el=$(sel);if(el)el.hidden=staff;
+  });
+  const label=$('#aoMyOrdersButton');
+  if(label)label.textContent=admin?'Customer Orders & receipts':'My Orders & receipts';
+  const customerHeading=$('#aoOrdersModal .drawer-head h2');
+  if(customerHeading)customerHeading.textContent=admin?'Customer Orders':'My Orders';
+ } const prevRoleLinks=window.aoUpdateRoleLinks;window.aoUpdateRoleLinks=function(){if(typeof prevRoleLinks==='function')prevRoleLinks();applyRoleChrome();};
  window.addEventListener('ao:auth-change',event=>{const user=event?.detail?.user||null;window.aoCurrentUser=user;if(typeof aoCurrentUser!=='undefined')aoCurrentUser=user;if(!user)profile=null;try{aoSyncTopAccount()}catch(_){}applyRoleChrome()});window.addEventListener('ao:order-created',()=>{if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();});window.addEventListener('load',()=>setTimeout(async()=>{try{if(typeof hydrateAjayDataFromSupabase==='function')await hydrateAjayDataFromSupabase();if(typeof aoSellerStatusSnapshot!=='undefined')aoSellerStatusSnapshot=sellers.map(v=>({user_id:v.user_id,status:v.status||'Pending review'}));if(typeof renderCustomerOrders==='function')renderCustomerOrders();if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();if(typeof renderSellerDashboard==='function')renderSellerDashboard();}catch(err){console.warn('Initial store data refresh failed:',err);}},900));document.addEventListener('DOMContentLoaded',applyRoleChrome);setTimeout(applyRoleChrome,500);setTimeout(applyRoleChrome,1600);
  document.addEventListener('change',e=>{if(e.target.id!=='sellerProductImageFile')return;const file=e.target.files?.[0],preview=$('#sellerProductImagePreview');if(!preview)return;if(!file){preview.hidden=true;preview.innerHTML='';return;}if(!/^image\/(png|jpeg|webp|gif)$/.test(file.type)||file.size>2.5*1024*1024){toast('Choose PNG, JPG, WEBP or GIF up to 2.5 MB');e.target.value='';preview.hidden=true;return;}const reader=new FileReader();reader.onload=()=>{preview.hidden=false;preview.innerHTML='<img alt="Selected product preview" style="width:100px;height:110px;object-fit:cover" src="'+String(reader.result).replace(/"/g,'&quot;')+'"><small>Selected image ready to publish</small>';};reader.readAsDataURL(file);});
 })();</script>
@@ -4513,8 +4557,9 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
  window.addEventListener('ao:auth-change',()=>{setTimeout(ensureRealtime,250);setTimeout(refreshStaffFromServer,700)});
  window.addEventListener('focus',()=>{if(!document.hidden)refreshStaffFromServer()});
 
- // Capture customer order-notification clicks before the legacy handler. Open the correct
- // order view, select Delivered when needed, then scroll to and visibly highlight that order.
+ // Fast-path customer order notification navigation. Preserve read-state handling,
+ // the correct customer order view, Delivered-tab routing and focus highlight.
+ // Replace repeated timer polling with an immediate lookup plus a short-lived DOM observer.
  document.addEventListener('click',e=>{
   const btn=e.target?.closest?.('#aoCustomerNotificationList [data-customer-order-id]');
   if(!btn)return;
@@ -4529,28 +4574,57 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
   $('#aoCustomerNotificationsModal')?.classList.remove('show');
   const reduced=(()=>{try{return window.matchMedia('(prefers-reduced-motion: reduce)').matches}catch(_){return false}})();
   const openOrders=async()=>{
-   try{if(typeof window.aoOpenCustomerOrdersPage==='function')await window.aoOpenCustomerOrdersPage();
-    else if(typeof window.openModal==='function')window.openModal('aoOrdersModal');
-    else $('#aoTopOrders')?.click();
+   try{
+    const staff=!!(window.aoCanSell?.()||window.aoIsAdmin?.());
+    // Customer orders are already in memory after initial hydration: do not wait
+    // for a redundant role lookup and full Supabase reload before opening My Orders.
+    if(!staff&&window.__aoInitialOrderHydrationComplete&&typeof window.openModal==='function'){
+     window.openModal('aoOrdersModal');
+    }else if(typeof window.aoOpenCustomerOrdersPage==='function'){
+     await window.aoOpenCustomerOrdersPage();
+    }else if(typeof window.openModal==='function'){
+     window.openModal('aoOrdersModal');
+    }else{
+     $('#aoTopOrders')?.click();
+    }
    }catch(err){console.warn('[Notifications] could not open customer orders',err)}
-   let tries=0;
+
+   let observer=null,finished=false,deliveredTried=false,stopTimer=null,queued=false;
+   const finish=()=>{finished=true;if(observer)observer.disconnect();if(stopTimer)clearTimeout(stopTimer)};
    const locate=()=>{
-    tries++;
-    const modal=$('#aoOrdersModal');
-    const host=$('#aoCustomerOrdersList');
-    if(!host||!modal?.classList.contains('show')){if(tries<35)setTimeout(locate,160);return}
-    let card=[...host.querySelectorAll('[data-ao-order-card]')].find(n=>String(n.getAttribute('data-ao-order-card'))===id);
-    if(!card&&tries<4){setTimeout(locate,160);return}
-    if(!card){const delivered=host.querySelector('[data-ao-order-tab="delivered"][data-ao-order-scope="customer"]');if(delivered){delivered.click();setTimeout(locate,220);return}}
-    card=[...host.querySelectorAll('[data-ao-order-card]')].find(n=>String(n.getAttribute('data-ao-order-card'))===id);
-    if(!card){if(tries<35)setTimeout(locate,160);else console.warn('[Notifications] matching customer order card was not found',id);return}
+    queued=false;
+    if(finished)return;
+    const modal=$('#aoOrdersModal'),host=$('#aoCustomerOrdersList');
+    if(!host||!modal?.classList.contains('show'))return;
+    const cards=host.querySelectorAll('[data-ao-order-card]');
+    let card=null;
+    for(const node of cards){if(String(node.getAttribute('data-ao-order-card'))===id){card=node;break}}
+    if(!card){
+     // When another order tab has rendered, switch to Delivered once and observe its render.
+     if(!deliveredTried&&cards.length){
+      const delivered=host.querySelector('[data-ao-order-tab="delivered"][data-ao-order-scope="customer"]');
+      if(delivered){deliveredTried=true;delivered.click();return}
+     }
+     return;
+    }
+    finish();
     card.scrollIntoView({behavior:reduced?'auto':'smooth',block:'center',inline:'nearest'});
     card.classList.remove('ao-notification-target-order');void card.offsetWidth;card.classList.add('ao-notification-target-order');
-    card.setAttribute('tabindex','-1');try{card.focus({preventScroll:true})}catch(_){try{card.focus()}catch(__){}}
+    card.setAttribute('tabindex','-1');
+    try{card.focus({preventScroll:true})}catch(_){try{card.focus()}catch(__){}}
     if(card._aoNotifyHighlightTimer)clearTimeout(card._aoNotifyHighlightTimer);
     card._aoNotifyHighlightTimer=setTimeout(()=>card.classList.remove('ao-notification-target-order'),3600);
    };
-   setTimeout(locate,180);
+   const scheduleLocate=()=>{if(queued||finished)return;queued=true;requestAnimationFrame(locate)};
+   // Look immediately, then react to actual DOM changes instead of waking the CPU
+   // every 160–220 ms while the requested order card is being rendered.
+   locate();
+   if(!finished&&window.MutationObserver){
+    observer=new MutationObserver(scheduleLocate);
+    observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','hidden','aria-selected']});
+    scheduleLocate(); // Recheck after observer attachment to cover synchronous tab/modal rendering.
+   }
+   if(!finished)stopTimer=setTimeout(()=>{finish();console.warn('[Notifications] matching customer order card was not found',id)},10000);
   };
   openOrders();
  },true);
