@@ -5452,6 +5452,29 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   #aoNeedsSellerAccessModal .btn {transition:none!important}
 }
 </style>
+
+<style id="ao-v125-update-stock-mobile-label-fix">
+/* Keep the seller stock action label crisp and evenly spaced on narrow screens. */
+.ao-seller-product-row .ao-catalogue-actions .ao-stock-update-btn{
+  display:inline-flex!important;align-items:center!important;justify-content:center!important;
+  flex:0 0 auto!important;min-width:max-content!important;max-width:100%!important;
+  padding:8px 12px!important;font-family:inherit!important;font-size:12px!important;
+  font-weight:650!important;line-height:1.25!important;letter-spacing:0!important;
+  text-transform:uppercase!important;white-space:nowrap!important;word-spacing:normal!important;
+  text-indent:0!important;text-align:center!important;
+  border:1px solid var(--line)!important;border-radius:999px!important;
+  background:var(--soft)!important;color:var(--ink)!important;
+  box-shadow:none!important;overflow:visible!important;
+}
+.ao-seller-product-row .ao-catalogue-actions .ao-stock-update-btn::before,
+.ao-seller-product-row .ao-catalogue-actions .ao-stock-update-btn::after{content:none!important;display:none!important}
+@media(max-width:560px){
+  .ao-seller-product-row .ao-catalogue-actions .ao-stock-update-btn{
+    min-height:38px!important;padding:8px 11px!important;font-size:12px!important;
+    letter-spacing:0!important;line-height:1.25!important;
+  }
+}
+</style>
 </body>
 <!-- AjayOutfits VERSION 95: admin can permanently delete approved or rejected reviews; existing theme tokens and typography retained. -->
 </html>
