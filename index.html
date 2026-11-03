@@ -1720,23 +1720,41 @@ let aoProductBroadcastChannel=null,aoProductBroadcastReady=false;
 function aoApplyRealtimeProduct(product){
  if(!product||product.id==null)return;
  const id=String(product.id),index=products.findIndex(p=>String(p.id)===id),copy={...product};
+ if(index>=0&&aoRecordFingerprint(products[index])===aoRecordFingerprint(copy))return;
  if(index>=0)products[index]=copy;else products.unshift(copy);
  aoLastSyncedProducts.set(id,aoRecordFingerprint(copy));
  write('products',products);
  refreshBrandOptions();refreshCategoryOptions();renderProducts();updateCounts();updateAdmin();renderSearchSuggestions();
+ // Keep seller/admin product rows and the open product detail in sync too.
+ try{renderSellerDashboard()}catch(err){console.warn('[Products] Seller dashboard refresh deferred:',err?.message||err)}
  aoRefreshOpenProductStock(copy);
  if($('#drawerTitle')?.textContent==='Your cart'&&$('#drawerOverlay')?.classList.contains('show'))renderCart();
 }
+let aoProductBroadcastSubscribePromise=null;
 function aoSubscribeProductBroadcast(){
- const db=window.ajaySupabase;if(!db||!db.channel)return;
+ const db=window.ajaySupabase;if(!db||!db.channel)return Promise.resolve(false);
+ if(aoProductBroadcastChannel&&aoProductBroadcastReady)return Promise.resolve(true);
+ if(aoProductBroadcastSubscribePromise)return aoProductBroadcastSubscribePromise;
  if(aoProductBroadcastChannel){try{db.removeChannel(aoProductBroadcastChannel)}catch(_){}}
  aoProductBroadcastReady=false;
- aoProductBroadcastChannel=db.channel('ao-products-live-broadcast',{config:{broadcast:{self:false}}})
-  .on('broadcast',{event:'product-upserted'},message=>aoApplyRealtimeProduct(message?.payload?.product))
-  .subscribe(status=>{aoProductBroadcastReady=status==='SUBSCRIBED';if(aoProductBroadcastReady)console.info('[Products] Live broadcast connected');else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status))console.warn('[Products] Live broadcast status:',status)});
+ aoProductBroadcastSubscribePromise=new Promise(resolve=>{
+  let settled=false;
+  const finish=ok=>{if(settled)return;settled=true;resolve(!!ok)};
+  aoProductBroadcastChannel=db.channel('ao-products-live-broadcast',{config:{broadcast:{self:false}}})
+   .on('broadcast',{event:'product-upserted'},message=>aoApplyRealtimeProduct(message?.payload?.product))
+   .subscribe(status=>{
+    aoProductBroadcastReady=status==='SUBSCRIBED';
+    if(aoProductBroadcastReady){console.info('[Products] Live broadcast connected');finish(true)}
+    else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){console.warn('[Products] Live broadcast status:',status);finish(false)}
+   });
+  setTimeout(()=>finish(aoProductBroadcastReady),8000);
+ }).finally(()=>{aoProductBroadcastSubscribePromise=null});
+ return aoProductBroadcastSubscribePromise;
 }
 async function aoPublishProductBroadcast(product){
- if(!product||!aoProductBroadcastChannel||!aoProductBroadcastReady)return false;
+ if(!product)return false;
+ const ready=await aoSubscribeProductBroadcast();
+ if(!ready||!aoProductBroadcastChannel||!aoProductBroadcastReady)return false;
  try{const result=await aoProductBroadcastChannel.send({type:'broadcast',event:'product-upserted',payload:{product,updated_at:new Date().toISOString()}});if(result!=='ok')console.warn('[Products] Broadcast send status:',result);return result==='ok'}catch(err){console.warn('[Products] Broadcast failed:',err?.message||err);return false}
 }
 
@@ -1842,7 +1860,13 @@ function aoSubscribeStoreRealtime(){
  aoSubscribeProductBroadcast();
  if(aoStoreRealtimeChannel){try{db.removeChannel(aoStoreRealtimeChannel)}catch(_){}}
  aoStoreRealtimeChannel=db.channel('ao-store-live-data')
-  .on('postgres_changes',{event:'*',schema:'public',table:'ao_products'},()=>aoQueueLiveHydrate())
+  .on('postgres_changes',{event:'*',schema:'public',table:'ao_products'},payload=>{
+   if(payload?.eventType==='DELETE'){
+    const removedId=String(payload.old?.id||'');
+    if(removedId){products=products.filter(item=>String(item.id)!==removedId);write('products',products);renderProducts();updateCounts();updateAdmin();renderSearchSuggestions();try{renderSellerDashboard()}catch(_){}}
+   }else if(payload?.new?.data){aoApplyRealtimeProduct(payload.new.data)}
+   aoQueueLiveHydrate();
+  })
   .on('postgres_changes',{event:'*',schema:'public',table:'ao_orders'},()=>aoQueueLiveHydrate())
   .on('postgres_changes',{event:'*',schema:'public',table:'ao_seller_applications'},payload=>{console.info('Seller application realtime event:',payload.eventType);aoLoadRole();aoQueueLiveHydrate()})
   .on('postgres_changes',{event:'*',schema:'public',table:'ao_user_roles'},async()=>{try{await aoLoadRole()}catch(_){}aoQueueLiveHydrate()})
@@ -2366,23 +2390,25 @@ $('#sellerDashListing').addEventListener('click',async e=>{
   await aoLoadRole();
   p=productById(id)||p;
   if(!aoCanSell()||(!aoIsAdmin()&&!ownsCurrentProduct()))throw new Error('Your seller session or product access could not be verified. Sign in again and retry.');
-  const updated={...p,stock:n,reserved:aoReservedStock(p)};
-  const now=new Date().toISOString();
-  // This is an existing product row: UPDATE avoids an upsert needing INSERT permission as well.
-  // RLS remains the server-side authority for whether this account may change this product.
-  const {data:saved,error}=await db.from('ao_products').update({data:updated,updated_at:now}).eq('id',id).select('id,data').single();
-  if(error)throw error;
-  if(!saved?.data)throw new Error('The database did not confirm the stock update. Check the ao_products UPDATE policy.');
+  // Use a server-side RPC: it validates the signed-in role and product ownership,
+  // then updates only the stock field. This avoids client-side upsert/RLS ambiguity.
+  const {data:saved,error}=await db.rpc('ao_update_product_stock',{p_product_id:id,p_stock:n}).single();
+  if(error){
+   if(/ao_update_product_stock|function.*not found|could not find the function/i.test(String(error.message||'')))throw new Error('Stock security function is not installed yet. Run the supplied AjayOutfits stock RPC SQL migration in Supabase, then retry.');
+   throw error;
+  }
+  if(!saved?.data)throw new Error('Supabase did not return the confirmed updated product.');
   const canonical={...saved.data};
+  if(Number(canonical.stock)!==n)throw new Error('Supabase returned a different stock quantity. The update was not confirmed.');
   const index=products.findIndex(item=>String(item.id)===id);
   if(index<0)products.unshift(canonical);else products[index]=canonical;
   aoLastSyncedProducts.set(id,aoRecordFingerprint(canonical));
   write('products',products);
-  // Broadcast the confirmed database value so other signed-in sessions update immediately.
+  // Publish the database-confirmed product to every open session on the shared channel.
   const broadcasted=await aoPublishProductBroadcast(canonical);
-  renderSellerDashboard();renderProducts();updateCounts();renderSearchSuggestions();
-  if(!broadcasted)console.warn('[Products] Stock saved, but fast broadcast is unavailable; database realtime is the fallback.');
-  toast('Stock updated successfully'+(broadcasted?' and synced live':''));
+  renderSellerDashboard();renderProducts();updateCounts();renderSearchSuggestions();aoRefreshOpenProductStock(canonical);
+  if(!broadcasted){console.warn('[Products] Stock is saved in Supabase, but the broadcast channel is not confirmed. Realtime database events remain enabled.');aoQueueLiveHydrate();}
+  toast(broadcasted?'Stock updated successfully and synced live':'Stock saved to database. Live channel is reconnecting.');
  }catch(err){
   console.error('[Products] Stock update failed:',err);
   toast('Stock was not updated: '+(err?.message||'Please try again'));
