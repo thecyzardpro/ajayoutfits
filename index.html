@@ -1934,7 +1934,7 @@ function aoApplyWishlist(id){const wasSaved=wishlist.includes(id);wishlist=wasSa
 async function aoContinuePendingAction(){const action=aoPendingCustomerAction;aoPendingCustomerAction=null;if(!action)return;if(action.type==='cart'){addCart(action.id,action.size,action.qty||1);return}if(action.type==='wishlist'){aoApplyWishlist(action.id);return}if(action.type==='checkout'){if(!cart.length){toast('Your cart is empty');return}const total=cart.reduce((n,i)=>n+(productById(i.id)?.price||0)*i.qty,0);$('#checkoutSummary').innerHTML='<strong>Order summary</strong><br>'+cart.map(i=>{const p=productById(i.id);return p?safe(p.name)+' × '+i.qty+' — '+money(p.price*i.qty):''}).filter(Boolean).join('<br>')+'<br><strong>Subtotal ('+cart.reduce((n,i)=>n+i.qty,0)+' items): '+money(total)+'</strong><br><span style="color:var(--muted)">Shipping and taxes are calculated at checkout.</span>';if(profile){$('#coName').value=profile.name||'';$('#coEmail').value=profile.email||''}$('#drawerOverlay').classList.remove('show');openModal('checkoutModal')}}
 function aoSetAuthMode(mode){aoAuthMode=mode;const registering=mode==='register';const rules=$('#aoSignupRules');if(rules){rules.hidden=!registering;rules.setAttribute('aria-live','polite')}if(registering&&$('#customerPassword'))aoPaintPasswordRules($('#customerPassword'),rules);$('#authHeading').textContent=registering?'Create your account.':'Welcome back.';$('#authIntro').textContent=registering?'Join Ajay Outfits to keep your shopping journey connected.':'Sign in to access your account and enjoy a smoother shopping experience.';$('#authNameField').hidden=!registering;$('#customerName').required=registering;const phoneField=$('#authPhoneField'),phoneInput=$('#customerPhone');if(phoneField)phoneField.hidden=!registering;if(phoneInput)phoneInput.required=registering;$('#customerPassword').autocomplete=registering?'new-password':'current-password';$('#authSubmit').textContent=registering?'Create account ↗︎':'Sign in ↗︎';$('#authSwitchText').innerHTML=registering?'Already have an account? <button type="button" id="authSwitch" class="ao-auth-link">Sign in</button>':'New to Ajay Outfits? <button type="button" id="authSwitch" class="ao-auth-link">Create an account</button><br><button type="button" id="forgotPasswordBtn" class="ao-auth-link-button">Forgot password?</button>'; $('#aoForgotPanel').hidden=true;$('#aoResetPanel').hidden=true;$('#accountForm').hidden=false;$('#showLogin').hidden=false;$('#showRegister').hidden=false;$('#showLogin').classList.toggle('active',!registering);$('#showRegister').classList.toggle('active',registering);$('#showLogin').setAttribute('aria-selected',String(!registering));$('#showRegister').setAttribute('aria-selected',String(registering));$('#accountStatus').textContent='';$('#accountStatus').removeAttribute('data-kind');}
 document.addEventListener('input',e=>{if(e.target&&e.target.id==='customerPassword'&&aoAuthMode==='register')aoPaintPasswordRules(e.target,$('#aoSignupRules'));if(e.target&&e.target.id==='aoNewPassword')aoPaintPasswordRules(e.target,$('#aoResetRules'))},true);
-document.addEventListener('focusin',e=>{const el=e.target;if(!el||!el.matches('input,textarea,select'))return;if(window.matchMedia('(max-width: 640px)').matches)setTimeout(()=>{try{el.scrollIntoView({block:'nearest',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})}catch(_){}},220)},true);
+/* Mobile input visibility is handled once by #ao-mobile-keyboard-visibility-script. */
 
 $('#showLogin').addEventListener('click',()=>aoSetAuthMode('login'));$('#showRegister').addEventListener('click',()=>aoSetAuthMode('register'));
 $('#authSwitchText').addEventListener('click',e=>{if(e.target.id==='authSwitch')aoSetAuthMode(aoAuthMode==='login'?'register':'login')});
@@ -2835,8 +2835,9 @@ const canSell=()=>typeof aoCanSell==='function'&&aoCanSell();
 const emailKey=(s)=>String(s||'').trim().toLowerCase();
 const orderStatus=(o)=>o.status||'Order Received';
 const paymentStatus=(o)=>o.paymentStatus||'Pending';
-const itemPaymentStatus=(i)=>String(i?.paymentStatus||i?.payment_status||'Pending');
-const allItemsReadyForCompletion=(o)=>{const lines=orderItems(o);return lines.length>0&&lines.every(i=>String(i.fulfilmentStatus||'').toLowerCase()==='delivered'&&itemPaymentStatus(i).toLowerCase()==='paid');};
+const itemPaymentStatus=(i)=>String(i?.paymentStatus||i?.payment_status||'Pending').trim();
+const itemFulfilmentStatus=(i)=>String(i?.fulfilmentStatus||i?.fulfillmentStatus||i?.fulfilment_status||i?.fulfillment_status||'Order Received').trim();
+const allItemsReadyForCompletion=(o)=>{const lines=orderItems(o);return lines.length>0&&lines.every(i=>itemFulfilmentStatus(i).toLowerCase()==='delivered'&&itemPaymentStatus(i).toLowerCase()==='paid');};
 const orderComplete=(o)=>String(orderStatus(o)).trim().toLowerCase()==='completed';
 const orderDelivered=(o)=>orderComplete(o); // A Delivered order stays in Active until its status is explicitly Completed.
 const receiptAvailable=(o)=>String(orderStatus(o)).trim().toLowerCase()==='completed'&&allItemsReadyForCompletion(o); // Only Admin completion unlocks the official receipt.
@@ -2851,7 +2852,9 @@ const linePrice=(i)=>Math.max(0,Number(i.price??i.unitPrice??i.unit_price??(type
 const computedOrderTotal=(o)=>{const sum=orderItems(o).reduce((n,i)=>n+lineQty(i)*linePrice(i),0);return orderItems(o).length?sum:Math.max(0,Number(o.total)||0)};
 const customerOrders=()=>{const u=activeUser();if(!u?.email)return [];return allOrders().filter(o=>emailKey(o.email)===emailKey(u.email)||o.customerUserId&&o.customerUserId===u.id).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));};
 const currentSellerShop=()=>((typeof aoCurrentRoleRow!=='undefined'&&aoCurrentRoleRow&&aoCurrentRoleRow.shop_name)||(typeof profile!=='undefined'&&profile&&profile.shopName)||(typeof profile!=='undefined'&&profile&&profile.name)||'');
-const sellerOwnsItem=(i)=>{const u=activeUser(),shop=currentSellerShop(),p=typeof productById==='function'?productById(i.productId||i.id):null,uid=i.sellerUserId||p?.sellerUserId,seller=i.sellerShopName||i.seller||p?.seller;return !!((uid&&u&&uid===u.id)||(!uid&&shop&&seller===shop));};
+const itemOwnership=(i)=>{const p=typeof productById==='function'?productById(i.productId||i.id):null;return {userId:String(i?.sellerUserId||p?.sellerUserId||''),shop:String(i?.sellerShopName||i?.seller||p?.seller||'').trim().toLowerCase()};};
+const sellerOwnsItem=(i)=>{const u=activeUser(),shop=currentSellerShop().trim().toLowerCase(),owner=itemOwnership(i);return !!((owner.userId&&u&&owner.userId===String(u.id))||(!owner.userId&&shop&&owner.shop===shop));};
+const adminOwnsItem=(i)=>{if(!isAdmin())return false;const u=activeUser(),owner=itemOwnership(i);if(owner.userId)return !!(u?.id&&owner.userId===String(u.id));if(owner.shop)return owner.shop==='ajay outfits'||owner.shop==='ajayoutfits';/* Legacy lines without seller metadata remain store-managed. */return true;};
 const ownSellerOrders=()=>{if(isAdmin())return allOrders();return allOrders().filter(o=>orderItems(o).some(sellerOwnsItem));};
 const visibleOrderItems=(o,staff)=>staff&&!isAdmin()&&canSell()?orderItems(o).filter(sellerOwnsItem):orderItems(o);
 const visibleOrderTotal=(o,items)=>items.length?items.reduce((n,i)=>n+lineQty(i)*linePrice(i),0):Math.max(0,Number(o.total)||0);
@@ -2871,12 +2874,17 @@ function orderCard(o,mode){
  const itemNames=items.map(i=>`${i.name||i.title||productById(i.productId||i.id)?.name||'Item'} × ${lineQty(i)}`).join(', ')||'Order items';
  const itemDetails=items.map(i=>{
   const itemName=i.name||i.title||productById(i.productId||i.id)?.name||'Item';
-  const itemStatus=String(i.fulfilmentStatus||'Order Received');
-  const sellerControl=sellerManager?`<div class="ao-seller-item-controls"><label class="ao-order-meta">Your delivery <select data-ao-item-fulfilment="${escAO(o.id)}" data-ao-product-id="${escAO(i.productId||i.id||'')}">${SELLER_FULFILMENT_FLOW.map(v=>`<option value="${escAO(v)}" ${itemStatus===v?'selected':''}>${escAO(v)}</option>`).join('')}</select></label><label class="ao-order-meta">Your payment <select data-ao-item-payment="${escAO(o.id)}" data-ao-product-id="${escAO(i.productId||i.id||'')}"><option value="Pending" ${itemPaymentStatus(i)==='Pending'?'selected':''}>Pending</option><option value="Paid" ${itemPaymentStatus(i)==='Paid'?'selected':''}>Paid</option></select></label></div>`:'';
+  const itemStatus=itemFulfilmentStatus(i), itemKey=String(i.productId||i.id||'');
+  const adminOwnLine=adminManager&&adminOwnsItem(i);
+  const canManageLine=sellerManager||adminOwnLine;
+  const controlOwner=adminOwnLine?'Store':'Your';
+  const fulfilmentOptions=SELLER_FULFILMENT_FLOW.map(v=>`<option value="${escAO(v)}" ${itemStatus.toLowerCase()===v.toLowerCase()?'selected':''}>${escAO(v)}</option>`).join('');
+  const fulfilmentCurrentOption=SELLER_FULFILMENT_FLOW.some(v=>v.toLowerCase()===itemStatus.toLowerCase())?'':`<option value="${escAO(itemStatus)}" selected disabled>${escAO(itemStatus)}</option>`;
+  const sellerControl=canManageLine?`<div class="ao-seller-item-controls"><label class="ao-order-meta">${controlOwner} delivery <select data-ao-item-fulfilment="${escAO(o.id)}" data-ao-product-id="${escAO(itemKey)}" data-ao-item-manager="${adminOwnLine?'admin':'seller'}">${fulfilmentCurrentOption}${fulfilmentOptions}</select></label><label class="ao-order-meta">${controlOwner} payment <select data-ao-item-payment="${escAO(o.id)}" data-ao-product-id="${escAO(itemKey)}" data-ao-item-manager="${adminOwnLine?'admin':'seller'}"><option value="Pending" ${itemPaymentStatus(i).toLowerCase()==='pending'?'selected':''}>Pending</option><option value="Paid" ${itemPaymentStatus(i).toLowerCase()==='paid'?'selected':''}>Paid</option></select></label></div>`:'';
   const statusLabel='';
   const fulfilmentTime=i.fulfilmentUpdatedAt?new Date(i.fulfilmentUpdatedAt).toLocaleString():'';
-  const fulfilmentMeta=i.fulfilmentStatus?`<small class="ao-fulfilment-time">Delivery: ${escAO(itemStatus)}${fulfilmentTime?` · Updated ${escAO(fulfilmentTime)}`:''}</small>`:'';
-  const paymentMeta=(sellerManager||adminManager)?`<small class="ao-fulfilment-time">Seller payment: ${escAO(itemPaymentStatus(i))}${i.paymentUpdatedAt?` · Updated ${escAO(new Date(i.paymentUpdatedAt).toLocaleString())}`:''}</small>`:'';
+  const fulfilmentMeta=(sellerManager||adminManager)?`<small class="ao-fulfilment-time">Delivery: ${escAO(itemStatus)}${fulfilmentTime?` · Updated ${escAO(fulfilmentTime)}`:''}</small>`:'';
+  const paymentMeta=(sellerManager||adminManager)?`<small class="ao-fulfilment-time">${adminOwnLine?'Store':'Seller'} payment: ${escAO(itemPaymentStatus(i))}${i.paymentUpdatedAt?` · Updated ${escAO(new Date(i.paymentUpdatedAt).toLocaleString())}`:''}</small>`:'';
   return `<div class="ao-order-meta">${escAO(itemName)} · Qty ${lineQty(i)} · ${fmtAO(linePrice(i)*lineQty(i))}${i.size?` · Size ${escAO(i.size)}`:''}${statusLabel}${fulfilmentMeta}${paymentMeta}${sellerControl}</div>`;
  }).join('');
  const deliveryBits=[o.delivery==='pickup'?'Pickup':'Delivery',o.address,o.city,o.country].filter(Boolean).map(escAO).join(', ');
@@ -2998,6 +3006,32 @@ async function setOrderField(id,field,value,select){
   alert('Your update could not be saved. Please try again or contact store support.');
  }
 }
+async function updateAdminOwnedItem(orderId,productId,field,value,select){
+ const db=window.ajaySupabase;
+ if(!db||!isAdmin()){if(select)select.value=select.dataset.previousValue||'Pending';alert('Only the store administrator can update AjayOutfits-owned order items.');return;}
+ const allowed=field==='fulfilment'?SELLER_FULFILMENT_FLOW:['Pending','Paid'];
+ if(!allowed.includes(value))return;
+ const order=allOrders().find(o=>String(o.id)===String(orderId));
+ const item=order&&orderItems(order).find(i=>String(i.productId||i.id||'')===String(productId)&&adminOwnsItem(i));
+ if(!order||!item){if(select)select.value=select.dataset.previousValue||'Pending';alert('This item is not assigned to AjayOutfits.');renderStaffOrders();return;}
+ const key=field==='fulfilment'?'fulfilmentStatus':'paymentStatus',timeKey=field==='fulfilment'?'fulfilmentUpdatedAt':'paymentUpdatedAt',historyKey=field==='fulfilment'?'fulfilmentHistory':null;
+ const previous={value:item[key],time:item[timeKey],history:Array.isArray(item[historyKey])?[...item[historyKey]]:undefined,updatedAt:order.updatedAt,updatedBy:order.updatedBy,updatedByRole:order.updatedByRole};
+ if(select){select.disabled=true;select.dataset.previousValue=String(item[key]|| (field==='fulfilment'?'Order Received':'Pending'));}
+ const now=new Date().toISOString(),actor=activeUser();
+ item[key]=value;item[timeKey]=now;if(historyKey){item[historyKey]=Array.isArray(item[historyKey])?item[historyKey]:[];item[historyKey].push({status:value,at:now,by:actor?.id||'admin',role:'admin'});}
+ order.updatedAt=now;order.updatedBy=actor?.id||'admin';order.updatedByRole='admin';
+ try{await updateOrderRow(order);renderCustomerOrders();renderStaffOrders();if(typeof updateAdmin==='function')updateAdmin();if(typeof renderSellerDashboard==='function')renderSellerDashboard();}
+ catch(err){if(previous.value===undefined)delete item[key];else item[key]=previous.value;if(previous.time===undefined)delete item[timeKey];else item[timeKey]=previous.time;if(historyKey){if(previous.history===undefined)delete item[historyKey];else item[historyKey]=previous.history;}order.updatedAt=previous.updatedAt;order.updatedBy=previous.updatedBy;order.updatedByRole=previous.updatedByRole;if(select)select.value=String(previous.value||(field==='fulfilment'?'Order Received':'Pending'));console.error('Admin-owned item update failed:',err);alert(err?.message||'The store item update could not be saved. Please try again.');}
+ finally{if(select)select.disabled=false;}
+}
+async function refreshOrderSnapshot(db,orderId,rpcData){
+ try{
+  const {data,error}=await db.from('ao_orders').select('id,data').eq('id',String(orderId)).maybeSingle();
+  if(!error&&data?.data&&typeof data.data==='object')return data.data;
+ }catch(err){console.warn('[Orders] Could not refresh saved item status after RPC:',err?.message||err)}
+ if(rpcData&&typeof rpcData==='object')return rpcData.data&&typeof rpcData.data==='object'?rpcData.data:rpcData;
+ return null;
+}
 async function updateSellerItemFulfilment(orderId,productId,value,select){
  const db=window.ajaySupabase;
  if(!db||!canSell()||isAdmin()){if(select)select.value=select.dataset.previousValue||'Order Received';alert('Seller fulfilment update is unavailable for this account.');return;}
@@ -3010,7 +3044,7 @@ async function updateSellerItemFulfilment(orderId,productId,value,select){
  try{
   const {data,error}=await db.rpc('ao_seller_update_order_item_fulfilment',{p_order_id:String(orderId),p_product_id:String(productId),p_status:value});
   if(error)throw error;
-  const updated=data&&typeof data==='object'?data:null;
+  const updated=await refreshOrderSnapshot(db,orderId,data);
   if(updated){const ix=allOrders().findIndex(o=>String(o.id)===String(orderId));if(ix>=0)orders[ix]=updated;}
   else {item.fulfilmentStatus=value;}
   renderCustomerOrders();renderStaffOrders();if(typeof renderSellerDashboard==='function')renderSellerDashboard();
@@ -3031,7 +3065,7 @@ async function updateSellerItemPayment(orderId,productId,value,select){
  try{
   const {data,error}=await db.rpc('ao_seller_update_order_item_payment_status',{p_order_id:String(orderId),p_product_id:String(productId),p_status:value});
   if(error)throw error;
-  const updated=data&&typeof data==='object'?data:null;
+  const updated=await refreshOrderSnapshot(db,orderId,data);
   if(updated){const ix=allOrders().findIndex(o=>String(o.id)===String(orderId));if(ix>=0)orders[ix]=updated;}
   else item.paymentStatus=value;
   renderCustomerOrders();renderStaffOrders();if(typeof renderSellerDashboard==='function')renderSellerDashboard();
@@ -3073,8 +3107,8 @@ function attachEvents(){
   if(e.target.closest('#aoPrintReceipt')){document.body.classList.add('ao-printing');window.print();return;}
  });
  document.addEventListener('change',e=>{
-  const f=e.target.closest('[data-ao-item-fulfilment]');if(f){updateSellerItemFulfilment(f.getAttribute('data-ao-item-fulfilment'),f.getAttribute('data-ao-product-id'),f.value,f);return;}
-  const ip=e.target.closest('[data-ao-item-payment]');if(ip){updateSellerItemPayment(ip.getAttribute('data-ao-item-payment'),ip.getAttribute('data-ao-product-id'),ip.value,ip);return;}
+  const f=e.target.closest('[data-ao-item-fulfilment]');if(f){const args=[f.getAttribute('data-ao-item-fulfilment'),f.getAttribute('data-ao-product-id'),f.value,f];if(f.dataset.aoItemManager==='admin')updateAdminOwnedItem(args[0],args[1],'fulfilment',args[2],args[3]);else updateSellerItemFulfilment(...args);return;}
+  const ip=e.target.closest('[data-ao-item-payment]');if(ip){const args=[ip.getAttribute('data-ao-item-payment'),ip.getAttribute('data-ao-product-id'),ip.value,ip];if(ip.dataset.aoItemManager==='admin')updateAdminOwnedItem(args[0],args[1],'payment',args[2],args[3]);else updateSellerItemPayment(...args);return;}
   const s=e.target.closest('[data-ao-status]');if(s){setOrderField(s.getAttribute('data-ao-status'),'status',s.value,s);return;}
   const p=e.target.closest('[data-ao-payment]');if(p)setOrderField(p.getAttribute('data-ao-payment'),'paymentStatus',p.value,p);
  });
@@ -3645,7 +3679,7 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
   const seenBeforeContext=seen.size;syncStaffOrderContext(d,seen);if(seen.size!==seenBeforeContext)changed=true;
   if(!d.baseline){d.baseline=true;changed=true}if(appsReady&&!d.appBaseline){d.appBaseline=true;changed=true}const uniqueNotices=[];const noticeKeys=new Set(),ownerByApplicationId=new Map(),latestIdByOwner=new Map();for(const app of appList){const appId=String(app.id||app.user_id||app.email||''),owner=String(app.user_id||app.email||'').trim().toLowerCase();if(appId&&owner){ownerByApplicationId.set(appId,owner);if(latestDecisionAppByOwner.get(owner)===app)latestIdByOwner.set(owner,appId);}}const decisionOwners=new Set();for(const n of notices){if(!n||!n.key||noticeKeys.has(n.key))continue;noticeKeys.add(n.key);if(n.kind==='application'&&String(n.key).startsWith('application-decision:')){const appId=String(n.sellerId||String(n.key).split(':')[1]||''),owner=ownerByApplicationId.get(appId);if(owner){if(latestIdByOwner.has(owner)&&latestIdByOwner.get(owner)!==appId){changed=true;continue;}if(decisionOwners.has(owner)){changed=true;continue;}decisionOwners.add(owner);}}uniqueNotices.push(n)}d.states=states;d.notices=uniqueNotices.slice(0,120);d.seen=[...seen].slice(-300);if(changed||uniqueNotices.length!==notices.length)save(d);return d;
  }
- function ensureModal(){let m=$('#aoSellerNotificationsModal');if(m)return m;m=document.createElement('div');m.className='modal';m.id='aoSellerNotificationsModal';m.innerHTML='<div class="modalbox ao-notifications-box" style="max-width:680px"><div class="drawer-head"><div><span class="eyebrow">AJAY OUTFITS</span><h2>Notifications</h2></div><button type="button" class="close" data-close="aoSellerNotificationsModal" aria-label="Close notifications">×</button></div><div class="ao-notification-toolbar"><p style="color:var(--muted)">Order arrivals, order status and payment changes, and seller application activity.</p><button type="button" id="aoStaffMarkAllRead" class="ao-mark-all-read" hidden>Mark all as read</button></div><div class="ao-notify-list" id="aoSellerNotificationList"></div></div>';document.body.appendChild(m);m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')});m.querySelector('[data-close]').addEventListener('click',()=>m.classList.remove('show'));return m}
+ function ensureModal(){let m=$('#aoSellerNotificationsModal');if(m)return m;m=document.createElement('div');m.className='modal';m.id='aoSellerNotificationsModal';m.innerHTML='<div class="modalbox ao-notifications-box" style="max-width:680px"><div class="drawer-head"><div><span class="eyebrow">AJAY OUTFITS</span><h2>Notifications</h2></div><button type="button" class="close" data-close="aoSellerNotificationsModal" aria-label="Close notifications">×</button></div><div class="ao-notification-toolbar"><p style="color:var(--muted)">Order arrivals, order status and payment changes, and seller application activity.</p><button type="button" id="aoStaffMarkAllRead" class="btn secondary ao-mark-all-read" hidden>Mark all as read</button></div><div class="ao-notify-list" id="aoSellerNotificationList"></div></div>';document.body.appendChild(m);m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')});m.querySelector('[data-close]').addEventListener('click',()=>m.classList.remove('show'));return m}
  function openNotifications(){
   const d=collect(),modal=ensureModal(),host=$('#aoSellerNotificationList');if(!host)return;
   const activeNotices=(d.notices||[]).filter(n=>!(d.seen||[]).includes(n.key));
@@ -3736,7 +3770,7 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
  function ensureBell(){if(!canSell()&&!isAdmin())return;const head=$(isAdmin()?'#adminModal .drawer-head':'#sellerDashboardModal .drawer-head');if(head&&!$('#aoStaffNotificationBell')){const b=document.createElement('button');b.type='button';b.className='ao-seller-notify-btn';b.id='aoStaffNotificationBell';b.innerHTML='<svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg><span>Notifications</span><span class="ao-notify-count" id="aoSellerNotificationCount" hidden>0</span>';b.addEventListener('click',openNotifications);head.insertAdjacentElement('afterend',b)}}
  function hook(){try{if(!uid()||uid()==='guest')return;ensureBell();const bellParent=$('.actions');if(bellParent&&(canSell()||isAdmin())&&!$('#aoSellerTopBell')){const b=document.createElement('button');b.type='button';b.id='aoSellerTopBell';b.className='iconbtn ao-seller-top-bell';b.setAttribute('aria-label','Open staff notifications');b.title='Notifications';b.innerHTML='<svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg><span class="ao-notify-count" id="aoSellerTopCount" hidden>0</span>';const account=$('#accountBtn');(account||bellParent.firstChild)?.insertAdjacentElement('beforebegin',b);b.addEventListener('click',openNotifications)}updateBadges();}catch(e){console.warn('Staff notifications could not refresh',e)}}
  document.addEventListener('click',e=>{if(e.target.closest('#sellerDashboardLink,#adminLink'))setTimeout(hook,150)});document.addEventListener('visibilitychange',()=>{if(!document.hidden)hook()});window.addEventListener('focus',hook);
- let tries=0;const timer=setInterval(()=>{if(!document.hidden)hook();if(++tries>80)clearInterval(timer)},1000);
+ let tries=0;const timer=setInterval(()=>{if(!document.hidden)hook();if(++tries>40)clearInterval(timer)},2000);
  const oldHydrate=window.hydrateAjayDataFromSupabase;if(typeof oldHydrate==='function'&&!oldHydrate.__aoStaffNoticeWrapped){const wrapped=async function(...args){const r=await oldHydrate.apply(this,args);setTimeout(hook,0);return r};wrapped.__aoStaffNoticeWrapped=true;window.hydrateAjayDataFromSupabase=wrapped}
  window.aoRefreshSellerNotifications=hook;
 })();
@@ -3790,7 +3824,7 @@ html[data-theme="dark"] .ao-customer-notice{background:var(--panel);color:var(--
  const oldHydrate=window.hydrateAjayDataFromSupabase;
  if(typeof oldHydrate==='function'&&!oldHydrate.__aoCustomerNoticeWrapped){const wrapped=async function(...args){const r=await oldHydrate.apply(this,args);setTimeout(()=>{capture();refreshHint()},0);return r};wrapped.__aoCustomerNoticeWrapped=true;window.hydrateAjayDataFromSupabase=wrapped;}
  // Supabase realtime callbacks and local order edits update this snapshot without a page refresh.
- let last='';setInterval(()=>{if(document.hidden)return;try{refreshHint();capture();const f=ownedOrders().map(o=>stateKey(o)).join('~');if(f!==last){last=f;renderNotices()}}catch(e){console.warn('Customer order notifications refresh failed',e)}},3000);
+ let last='';setInterval(()=>{if(document.hidden)return;try{refreshHint();capture();const f=ownedOrders().map(o=>stateKey(o)).join('~');if(f!==last){last=f;renderNotices()}}catch(e){console.warn('Customer order notifications refresh failed',e)}},8000);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden){capture();refreshHint();renderNotices()}});
  window.aoRefreshCustomerOrderNotifications=()=>{capture();refreshHint();renderNotices()};
 })();
@@ -3871,7 +3905,7 @@ html[data-theme="dark"] .ao-live-order-toast{background:var(--panel,#202124);col
  document.addEventListener('click',e=>{const b=e.target.closest('[data-ao-customer-notice]');if(!b)return;const id=String(b.dataset.aoCustomerNotice||'');try{const k=`ao_customer_order_notices_v3_${uid()}`,d=JSON.parse(localStorage.getItem(k)||'{}');d.unread=(d.unread||[]).filter(x=>!String(x).startsWith(id+'|'));localStorage.setItem(k,JSON.stringify(d));setTimeout(()=>window.aoRefreshCustomerOrderNotifications?.(),0)}catch(_){}});
  // Dismissible toast opens the relevant notification center when clicked.
  document.addEventListener('click',e=>{const t=e.target.closest('.ao-live-order-toast');if(!t||e.target.closest('button'))return;if(canSell()||isAdmin())document.querySelector('#aoStaffNotificationBell,#aoSellerTopBell')?.click();else document.querySelector('#aoMyOrdersButton,#aoDashboardOrders,#aoTopOrders')?.click();t.remove()});
- setInterval(()=>{if(document.hidden)return;try{customerPoll();staffPoll();if(window.__aoInitialOrderHydrationComplete)booted=true}catch(e){console.warn('Live notification toast refresh failed',e)}},3000);
+ setInterval(()=>{if(document.hidden)return;try{customerPoll();staffPoll();if(window.__aoInitialOrderHydrationComplete)booted=true}catch(e){console.warn('Live notification toast refresh failed',e)}},8000);
 })();
 </script>
 
@@ -3916,7 +3950,7 @@ html[data-theme="dark"] #aoSellerTopBell .ao-notify-count,html[data-theme="dark"
  function tick(){try{syncAndToast()}catch(e){console.warn('Seller notification UI refresh failed',e)}}
  document.addEventListener('click',e=>{if(e.target.closest('#sellerDashboardLink,#adminLink'))setTimeout(tick,200)});
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick()});window.addEventListener('focus',tick);
- let tries=0;const timer=setInterval(()=>{if(!document.hidden)tick();if(++tries>360)clearInterval(timer)},1000);tick();
+ let tries=0;const timer=setInterval(()=>{if(!document.hidden)tick();if(++tries>120)clearInterval(timer)},3000);tick();
 })();
 </script>
 
@@ -4048,12 +4082,18 @@ html[data-theme="dark"] #aoCustomerTopCount{background:#f4f5f7!important;color:#
 </style>
 <script id="ao-customer-notification-center-final-polish-script">
 (()=>{
- const removeLegacyCustomerNoticeUI=()=>{
-  document.querySelectorAll('#aoCustomerOrderNoticePanel,.ao-customer-notice-panel').forEach(el=>{el.style.setProperty('display','none','important');});
-  document.querySelectorAll('.ao-customer-order-badge').forEach(el=>{el.hidden=true;el.style.setProperty('display','none','important');});
+ const legacyPanelSelector='#aoCustomerOrderNoticePanel,.ao-customer-notice-panel';
+ const legacyBadgeSelector='.ao-customer-order-badge';
+ const suppressLegacyNode=node=>{
+  if(!node||node.nodeType!==1)return;
+  if(node.matches(legacyPanelSelector))node.style.setProperty('display','none','important');
+  if(node.matches(legacyBadgeSelector)){node.hidden=true;node.style.setProperty('display','none','important');}
+  node.querySelectorAll?.(legacyPanelSelector).forEach(el=>el.style.setProperty('display','none','important'));
+  node.querySelectorAll?.(legacyBadgeSelector).forEach(el=>{el.hidden=true;el.style.setProperty('display','none','important');});
  };
- removeLegacyCustomerNoticeUI();
- const observer=new MutationObserver(removeLegacyCustomerNoticeUI);
+ document.querySelectorAll(legacyPanelSelector).forEach(el=>el.style.setProperty('display','none','important'));
+ document.querySelectorAll(legacyBadgeSelector).forEach(el=>{el.hidden=true;el.style.setProperty('display','none','important');});
+ const observer=new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)suppressLegacyNode(node)});
  observer.observe(document.body,{childList:true,subtree:true});
  document.addEventListener('click',e=>{if(e.target.closest('#aoMyOrdersButton,#aoDashboardOrders,#aoTopOrders'))setTimeout(removeLegacyCustomerNoticeUI,200)});
 })();
@@ -4195,7 +4235,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .modalbox,html[data-theme=
  const tick=()=>{refreshCustomerState();refreshOpenStaff()};
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick()});
  window.addEventListener('focus',tick);
- setInterval(()=>{if(!document.hidden&&(uid()!=='guest'||roleStaff()))tick()},2000);
+ setInterval(()=>{if(!document.hidden&&(uid()!=='guest'||roleStaff()))tick()},5000);
  const oldUpsert=window.upsertRealtimeOrder;
  if(typeof oldUpsert==='function'&&!oldUpsert.__aoLiveNotificationsWrapped){const wrapped=function(...args){const r=oldUpsert.apply(this,args);setTimeout(tick,0);return r};wrapped.__aoLiveNotificationsWrapped=true;window.upsertRealtimeOrder=wrapped}
  setTimeout(tick,250);
@@ -4258,7 +4298,7 @@ html[data-theme="dark"] #aoSellerNotificationsModal .ao-mark-all-read{background
 (()=>{const $=s=>document.querySelector(s);function sync(){try{window.aoRefreshSellerNotifications?.();const m=$('#aoSellerNotificationsModal');if(m?.classList.contains('show')){const list=$('#aoSellerNotificationList');if(list&&!list.querySelector('[data-ao-notice]')){const b=$('#aoStaffMarkAllRead');if(b)b.hidden=true;}}}catch(_){}}
 // Existing Supabase hydration/realtime updates feed the order snapshot; refresh staff badges promptly on data changes.
 const old=window.hydrateAjayDataFromSupabase;if(typeof old==='function'&&!old.__aoFinalReadSync){const wrapped=async function(...a){const r=await old.apply(this,a);setTimeout(sync,0);return r};wrapped.__aoFinalReadSync=true;window.hydrateAjayDataFromSupabase=wrapped}
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync()});window.addEventListener('focus',sync);setInterval(()=>{if(!document.hidden)sync()},3000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync()});window.addEventListener('focus',sync);setInterval(()=>{if(!document.hidden)sync()},10000);
 })();
 </script>
 
@@ -4398,7 +4438,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
  function open(){const m=ensureModal();renderList(m,items());m.classList.add('show')}
  document.addEventListener('click',e=>{if(e.target.closest('#aoMyOrdersButton,#aoDashboardOrders,#aoTopOrders'))setTimeout(sync,180)});
  const oldHydrate=window.hydrateAjayDataFromSupabase;if(typeof oldHydrate==='function'&&!oldHydrate.__aoCustomerBellWrapped){const wrapped=async function(...args){const r=await oldHydrate.apply(this,args);setTimeout(sync,0);return r};wrapped.__aoCustomerBellWrapped=true;window.hydrateAjayDataFromSupabase=wrapped}
- window.addEventListener('storage',e=>{if(e.key&&e.key.startsWith('ao_customer_order_notices_v3_'))sync()});document.addEventListener('visibilitychange',()=>{if(!document.hidden){connectDecisionRealtime();refreshCustomerDecisionFromServer();sync()}});window.addEventListener('focus',()=>{connectDecisionRealtime();refreshCustomerDecisionFromServer();sync()});setInterval(()=>{if(!document.hidden)sync()},4000);setInterval(()=>{if(!document.hidden)refreshCustomerDecisionFromServer()},6000);connectDecisionRealtime();refreshCustomerDecisionFromServer();sync();
+ window.addEventListener('storage',e=>{if(e.key&&e.key.startsWith('ao_customer_order_notices_v3_'))sync()});document.addEventListener('visibilitychange',()=>{if(!document.hidden){connectDecisionRealtime();refreshCustomerDecisionFromServer();sync()}});window.addEventListener('focus',()=>{connectDecisionRealtime();refreshCustomerDecisionFromServer();sync()});setInterval(()=>{if(!document.hidden)sync()},8000);setInterval(()=>{if(!document.hidden)refreshCustomerDecisionFromServer()},20000);connectDecisionRealtime();refreshCustomerDecisionFromServer();sync();
 })();
 </script>
 
@@ -4697,7 +4737,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
   }
  }catch(err){console.warn('[Seller applications] live pending focus failed',err)}}
  // Initial data and realtime hydrations may finish after this patch is loaded.
- setInterval(()=>{if(!document.hidden){enforceFooter();checkAdminPending()}},2000);
+ setInterval(()=>{if(!document.hidden){enforceFooter();checkAdminPending()}},5000);
  window.addEventListener('focus',()=>{enforceFooter();checkAdminPending()});
  window.addEventListener('ao:auth-change',()=>{pendingSnapshot=null;setTimeout(()=>{enforceFooter();checkAdminPending()},500)});
 })();
@@ -4728,7 +4768,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
  const sellerLink=$('#sellerDashboardLink');if(sellerLink&&window.MutationObserver){new MutationObserver(schedule).observe(sellerLink,{childList:true,subtree:true,attributes:true,attributeFilter:['class','hidden']});}
  const adminLink=$('#adminLink');if(adminLink&&window.MutationObserver){new MutationObserver(schedule).observe(adminLink,{childList:true,subtree:true});}
  document.addEventListener('ao:auth-change',schedule);document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedule()});window.addEventListener('focus',schedule);
- let ticks=0;const timer=setInterval(()=>{if(!document.hidden)schedule();if(++ticks>=1200)clearInterval(timer)},1500);
+ let ticks=0;const timer=setInterval(()=>{if(!document.hidden)schedule();if(++ticks>=360)clearInterval(timer)},5000);
  schedule();
 })();
 </script>
@@ -4771,7 +4811,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
  const client=db();
  if(client?.channel){try{client.channel('ao-v53-approved-role-sync').on('postgres_changes',{event:'*',schema:'public',table:'ao_seller_applications'},()=>syncApprovedRole()).on('postgres_changes',{event:'*',schema:'public',table:'ao_user_roles'},payload=>{const row=payload?.new||payload?.record||{},u=currentUser();if(u?.id&&String(row.user_id||'')===String(u.id))syncApprovedRole()}).subscribe()}catch(e){console.warn('[Seller approval] Realtime role sync unavailable:',e)}}
  syncApprovedRole();
- const timer=setInterval(()=>{if(!document.hidden)syncApprovedRole()},6000);
+ const timer=setInterval(()=>{if(!document.hidden)syncApprovedRole()},15000);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncApprovedRole()});
  window.addEventListener('focus',syncApprovedRole);
  window.addEventListener('ao:auth-change',()=>{lastUser='';lastDecision='';setTimeout(syncApprovedRole,250)});
@@ -5264,7 +5304,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
  function handleApp(app){const u=user();if(!u?.id||!app||String(app.user_id||'')!==String(u.id)||!isDisapproved(app))return false;revoke();return true;}
  async function verify(){if(busy)return;const u=user(),db=window.ajaySupabase;if(!u?.id||window.aoIsAdmin?.()||!db)return;busy=true;try{const {data,error}=await db.from('ao_seller_applications').select('data,updated_at').eq('data->>user_id',String(u.id)).order('updated_at',{ascending:false}).limit(1);if(error)throw error;const row=Array.isArray(data)?data[0]:null;const app=row?.data||null;if(app&&isDisapproved(app)){handleApp(app);return;}}catch(e){console.warn('[Seller access] Realtime verification pending:',e?.message||e)}finally{busy=false}}
  const db=window.ajaySupabase;if(db){try{db.channel('ao-v51-immediate-seller-revocation').on('postgres_changes',{event:'*',schema:'public',table:'ao_seller_applications'},payload=>{const row=payload?.new||payload?.record||null;const app=row?.data||row;if(app&&handleApp(app))return;verify()}).on('postgres_changes',{event:'*',schema:'public',table:'ao_user_roles'},payload=>{const row=payload?.new||payload?.record||{};const u=user();if(u?.id&&String(row.user_id||'')===String(u.id)&&String(row.role||'').toLowerCase()!=='seller'){verify()}}).subscribe(status=>{if(status==='SUBSCRIBED')verify()})}catch(e){console.warn('[Seller access] Realtime subscription unavailable:',e)}}
- let cycles=0;const timer=setInterval(()=>{if(document.hidden)return;const u=user();if(!u?.id||window.aoIsAdmin?.())return;verify();if(++cycles>=720)clearInterval(timer)},5000);
+ let cycles=0;const timer=setInterval(()=>{if(document.hidden)return;const u=user();if(!u?.id||window.aoIsAdmin?.())return;verify();if(++cycles>=240)clearInterval(timer)},15000);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)verify()});window.addEventListener('focus',verify);window.addEventListener('ao:auth-change',()=>setTimeout(verify,300));
  setTimeout(verify,400);
 })();
@@ -5381,7 +5421,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
    window.aoRefreshProductReviews?.();
   }).subscribe(status=>{if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'){try{c.removeChannel(channel)}catch(_){}channel=null;}})}catch(e){channel=null;console.warn('[Customer reviews] Approval realtime subscription deferred:',e?.message||e)}
  }
- const start=()=>{bind();};document.addEventListener('DOMContentLoaded',start,{once:true});window.addEventListener('focus',start);document.addEventListener('visibilitychange',()=>{if(!document.hidden)start()});setInterval(start,4000);
+ const start=()=>{bind();};document.addEventListener('DOMContentLoaded',start,{once:true});window.addEventListener('focus',start);document.addEventListener('visibilitychange',()=>{if(!document.hidden)start()});setInterval(start,15000);
 })();
 </script>
 
@@ -5402,7 +5442,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
  async function catchUp(){if(busy||!admin()||!uid()||!client())return;busy=true;try{const c=client(),stored=localStorage.getItem(cursorKey());if(!stored){localStorage.setItem(cursorKey(),new Date().toISOString());return;}const {data,error}=await c.from('ao_product_reviews').select('id,product_id,created_at').gt('created_at',stored).order('created_at',{ascending:true}).limit(100);if(error)throw error;const rows=data||[];for(const row of rows)addReviewNotice(row);if(rows.length){const newest=rows.reduce((v,r)=>String(r.created_at)>v?String(r.created_at):v,stored);localStorage.setItem(cursorKey(),newest);}}catch(e){console.warn('[Admin reviews] Notification sync deferred:',e?.message||e)}finally{busy=false}}
  function bind(){const c=client(),who=uid();if(!admin()||!who||!c?.channel)return;if(channel&&bootedFor===who)return;if(channel){try{c.removeChannel(channel)}catch(_){}channel=null;}bootedFor=who;try{channel=c.channel('ao-v93-admin-review-notices').on('postgres_changes',{event:'INSERT',schema:'public',table:'ao_product_reviews'},payload=>{if(payload?.new)addReviewNotice(payload.new)}).subscribe(status=>{if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'){try{c.removeChannel(channel)}catch(_){}channel=null;bootedFor='';}});}catch(e){channel=null;bootedFor='';console.warn('[Admin reviews] Realtime notification subscription unavailable:',e?.message||e)}}
  function start(){if(!admin()){if(channel){try{client()?.removeChannel(channel)}catch(_){}channel=null;}bootedFor='';return;}bind();catchUp();}
- document.addEventListener('visibilitychange',()=>{if(!document.hidden)start()});window.addEventListener('focus',start);document.addEventListener('DOMContentLoaded',start,{once:true});setInterval(()=>{if(!document.hidden)start()},20000);start();
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)start()});window.addEventListener('focus',start);document.addEventListener('DOMContentLoaded',start,{once:true});setInterval(()=>{if(!document.hidden)start()},30000);start();
 })();
 </script>
 
@@ -5423,5 +5463,91 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .ao-seller-review-card.is-target{border-color:var(--accent,var(--ink));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent,var(--ink)) 17%,transparent);background:var(--soft)}
 html[data-theme="dark"] .ao-seller-review-card{background:var(--panel);color:var(--ink);border-color:var(--line)}
 @media(max-width:600px){.ao-seller-review-inbox-head{align-items:flex-start}.ao-seller-review-card{padding:12px}}
+</style>
+<style id="ao-seller-notification-controls-theme-fix">
+/* Reuse the storefront's actual button classes so Default, Light and Dark
+   inherit exactly the same theme tokens, typography and geometry. */
+#aoSellerNotificationsModal,
+#aoSellerDecisionResultModal,
+#aoNeedsSellerAccessModal { font-family: inherit; }
+#aoSellerNotificationsModal .modalbox,
+#aoSellerDecisionResultModal .modalbox,
+#aoNeedsSellerAccessModal .modalbox {
+  color: var(--ink); background: var(--panel); border-color: var(--line); font-family: inherit;
+}
+#aoSellerNotificationsModal button,
+#aoSellerDecisionResultModal button,
+#aoNeedsSellerAccessModal button {
+  font-family: inherit; -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation; pointer-events: auto; box-sizing: border-box;
+}
+/* Actions use the real .btn / .btn.secondary classes. Their visual design is
+   intentionally not redefined here, so all themes stay identical site-wide. */
+#aoSellerNotificationsModal button:focus-visible,
+#aoSellerDecisionResultModal button:focus-visible,
+#aoNeedsSellerAccessModal button:focus-visible,
+#aoSellerNotificationsModal .ao-notify-item:focus-visible {
+  outline: 2px solid var(--ao-focus, var(--accent)) !important; outline-offset: 3px;
+}
+#aoSellerDecisionResultModal #aoSellerDecisionAction:disabled { opacity: .65; cursor: wait; transform: none; }
+#aoSellerNotificationsModal .ao-notify-item {
+  position: relative; z-index: 1; min-height: 68px; cursor: pointer;
+  pointer-events: auto; touch-action: manipulation; font-family: inherit;
+  color: var(--ink); background: var(--panel); border-color: var(--line);
+}
+#aoSellerNotificationsModal .ao-notify-item b { color: var(--ink); font-family: inherit; font-weight: 750; }
+#aoSellerNotificationsModal .ao-notify-item small,
+#aoSellerNotificationsModal .ao-notify-item em { color: var(--muted); }
+@media (max-width: 520px) {
+  #aoSellerNotificationsModal .ao-notification-toolbar { align-items: stretch; gap: 10px; }
+  #aoSellerNotificationsModal .ao-mark-all-read,
+  #aoSellerNotificationsModal #aoStaffMarkAllRead { width: 100%; min-height: 44px; }
+  #aoSellerDecisionResultModal #aoSellerDecisionAction,
+  #aoSellerDecisionResultModal #aoSellerDecisionClose { flex: 1 1 100%; width: 100%; min-width: 0; min-height: 46px; }
+  #aoNeedsSellerAccessModal [data-access-close] { width: 100%; min-height: 46px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #aoSellerNotificationsModal button,
+  #aoSellerDecisionResultModal button,
+  #aoNeedsSellerAccessModal button { transition: none !important; }
+}
+</style>
+
+
+<style id="ao-v112-responsive-forms-keyboard-efficiency">
+/* V112: responsive form ergonomics across customer, seller and admin surfaces.
+   Keep existing theme variables, typography and all form/business logic intact. */
+:where(form,.formgrid,.field,.ao-auth-form,.ao-page-content,.ao-page-shell){min-width:0;max-width:100%}
+:where(form) :where(input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),select,textarea){box-sizing:border-box;max-width:100%;min-width:0;font-family:inherit;color:var(--ink);}
+:where(form) :where(input,select,textarea){scroll-margin-block:24px 64px;}
+:where(form) textarea{width:100%;min-height:104px;resize:vertical;line-height:1.5;}
+:where(form) :where(button,[type="submit"],[type="button"]){font-family:inherit;max-width:100%;touch-action:manipulation;overflow-wrap:anywhere;}
+:where(.field,.formgrid)>*{min-width:0;}
+:where(.modal,.drawer,#aoStandaloneDashboard){min-width:0;}
+:where(.modal.show,.drawer.show){overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+:where(.modalbox,.drawer .modalbox){min-width:0;max-width:100%;}
+/* Prevent wide tables, long values and validation messages from expanding mobile layouts. */
+:where(form,.modalbox,.drawer,#aoStandaloneDashboard){overflow-wrap:anywhere;}
+:where(form) :where(small,.error,.hint,[role="alert"],[role="status"]){overflow-wrap:anywhere;line-height:1.5;}
+@media(max-width:760px){
+  :where(.formgrid){grid-template-columns:minmax(0,1fr)!important;gap:12px;}
+  :where(form) :where(input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),select,textarea){width:100%;min-height:46px;font-size:16px!important;}
+  :where(form) textarea{min-height:110px;}
+  :where(form) :where(button,[type="submit"],[type="button"]){min-height:44px;}
+  :where(.modal.show,.drawer.show){max-width:100vw;}
+  :where(.modal.show .modalbox,.drawer.show .modalbox){width:100%;max-width:100%;min-height:0;max-height:calc(var(--ao-vv-height,100dvh) - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-x:hidden;overflow-y:auto;}
+  :where(#aoStandaloneDashboard .ao-page-toolbar){flex-wrap:wrap;align-items:flex-start;}
+  :where(#aoStandaloneDashboard .ao-page-toolbar)>*{min-width:0;max-width:100%;}
+  :where(#aoStandaloneDashboard .ao-seller-product-row){min-width:0;}
+  :where(#aoStandaloneDashboard) :where(input,select,textarea){font-size:16px!important;}
+}
+@media(max-width:380px){
+  :where(.modal.show .modalbox,.drawer.show .modalbox){padding:12px!important;}
+  :where(form) :where(button,[type="submit"],[type="button"]){white-space:normal;line-height:1.25;}
+  :where(.ao-page-toolbar){gap:8px!important;}
+}
+@media(hover:none),(pointer:coarse){
+  :where(form) :where(button,[type="submit"],[type="button"]){-webkit-tap-highlight-color:transparent;}
+}
 </style>
 
