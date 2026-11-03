@@ -1291,12 +1291,13 @@ html[data-theme="dark"] #aoReceiptModal #aoReceiptContent .ao-receipt-qr,
 
 <style id="ao-professional-responsive-menu-fix">
 /* Keep the full navigation on wide screens; use a compact expandable menu only when space is tight. */
-@media (min-width:1121px){
+@media (min-width:1361px){
   .header .mobile-menu{display:none!important}
   .header #primaryNav{display:flex!important;flex-basis:auto!important;width:auto!important;order:initial!important;padding:0!important;overflow:visible!important}
   .header #primaryNav a{display:inline-flex!important}
+  .header .search{min-width:0;flex:1 1 180px}
 }
-@media (min-width:621px) and (max-width:1120px){
+@media (min-width:621px) and (max-width:1360px){
   .header .nav{flex-wrap:wrap;row-gap:8px;padding-top:10px;padding-bottom:10px}
   .header .mobile-menu{display:grid!important;order:3;width:40px;height:40px;flex:0 0 40px;border-radius:12px}
   .header #primaryNav{display:none!important}
@@ -4439,6 +4440,18 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
  document.addEventListener('click',e=>{if(e.target.closest('#aoMyOrdersButton,#aoDashboardOrders,#aoTopOrders'))setTimeout(sync,180)});
  const oldHydrate=window.hydrateAjayDataFromSupabase;if(typeof oldHydrate==='function'&&!oldHydrate.__aoCustomerBellWrapped){const wrapped=async function(...args){const r=await oldHydrate.apply(this,args);setTimeout(sync,0);return r};wrapped.__aoCustomerBellWrapped=true;window.hydrateAjayDataFromSupabase=wrapped}
  window.addEventListener('storage',e=>{if(e.key&&e.key.startsWith('ao_customer_order_notices_v3_'))sync()});document.addEventListener('visibilitychange',()=>{if(!document.hidden){connectDecisionRealtime();refreshCustomerDecisionFromServer();sync()}});window.addEventListener('focus',()=>{connectDecisionRealtime();refreshCustomerDecisionFromServer();sync()});setInterval(()=>{if(!document.hidden)sync()},8000);setInterval(()=>{if(!document.hidden)refreshCustomerDecisionFromServer()},20000);connectDecisionRealtime();refreshCustomerDecisionFromServer();sync();
+ // Header/auth UI can be mounted after this script runs. Observe that transition
+ // so the customer bell appears immediately instead of waiting for the 8s poll.
+ let bellBootObserver=null,bellBootTimer=null,bellBootTicks=0;
+ const tryMountCustomerBell=()=>{if(document.hidden||admin()||seller()||!signed())return;const actions=$('.actions');if(actions&&!$('#aoCustomerTopBell'))sync();if($('#aoCustomerTopBell')){if(bellBootObserver){bellBootObserver.disconnect();bellBootObserver=null}if(bellBootTimer){clearInterval(bellBootTimer);bellBootTimer=null}}};
+ const startBellBootWatch=()=>{
+  tryMountCustomerBell();
+  if(!bellBootObserver&&document.documentElement){bellBootObserver=new MutationObserver(()=>{if(!$('#aoCustomerTopBell'))tryMountCustomerBell()});bellBootObserver.observe(document.documentElement,{childList:true,subtree:true});}
+  if(!bellBootTimer){bellBootTicks=0;bellBootTimer=setInterval(()=>{bellBootTicks++;tryMountCustomerBell();if(bellBootTicks>=30||$('#aoCustomerTopBell')){clearInterval(bellBootTimer);bellBootTimer=null}},400);}
+ };
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',startBellBootWatch,{once:true});else startBellBootWatch();
+ window.addEventListener('ao-auth-state-changed',startBellBootWatch);
+ window.addEventListener('storage',e=>{if(e.key&&/auth|session|user|profile/i.test(e.key))startBellBootWatch()});
 })();
 </script>
 
@@ -5098,7 +5111,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
  }
  installAdminReviewPanel();if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installAdminReviewPanel,{once:true});
 
- if(client?.channel){try{client.channel('ao-v91-product-reviews-live').on('postgres_changes',{event:'*',schema:'public',table:'ao_product_reviews'},()=>{window.aoRefreshProductReviews?.();refreshAdminReviews()}).subscribe()}catch(e){console.warn('[Product reviews] Realtime subscription unavailable:',e?.message||e)}}
+ const realtimeClient=db();if(realtimeClient?.channel){try{realtimeClient.channel('ao-v91-product-reviews-live').on('postgres_changes',{event:'*',schema:'public',table:'ao_product_reviews'},()=>{window.aoRefreshProductReviews?.();refreshAdminReviews()}).subscribe()}catch(e){console.warn('[Product reviews] Realtime subscription unavailable:',e?.message||e)}}
 })();
 </script>
 
@@ -5278,6 +5291,95 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 
 <style id="ao-seller-payment-controls">
 .ao-seller-item-controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}.ao-seller-item-controls label{display:grid;gap:5px;min-width:150px}.ao-seller-item-controls select{max-width:100%;min-height:38px;padding:7px 30px 7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);font:inherit;font-size:12px}.ao-seller-item-controls select:focus-visible{outline:2px solid var(--accent,var(--ink));outline-offset:2px}@media(max-width:560px){.ao-seller-item-controls{display:grid;grid-template-columns:1fr}.ao-seller-item-controls label{min-width:0}.ao-seller-item-controls select{width:100%}}
+</style>
+
+<style id="ao-v118-theme-font-responsive-verification-fix">
+/* Keep seller notification action buttons on the same typography stack as the site's regular .btn controls. */
+#aoSellerNotificationsModal .btn,
+#aoSellerDecisionResultModal .btn,
+#aoNeedsSellerAccessModal .btn {
+  font-family:Inter,"Segoe UI",Roboto,Helvetica,Arial,sans-serif!important;
+}
+</style>
+
+
+<style id="ao-v119-seller-notification-mark-all-button-alignment">
+/* Match the seller notification toolbar action to the storefront's real .btn.secondary geometry.
+   Theme colours and typography continue to come from the global button/theme cascade. */
+#aoSellerNotificationsModal #aoStaffMarkAllRead.btn.secondary {
+  border-radius:2px!important;
+  padding:13px 19px!important;
+}
+</style>
+
+<style id="ao-v120-seller-notification-dark-theme-button-contrast">
+/* v120: Scope the shared global button tokens to seller-notification actions only.
+   Primary, secondary and close controls now resolve from the active theme tokens. */
+#aoSellerNotificationsModal .btn:not(.secondary),
+#aoSellerDecisionResultModal .btn:not(.secondary),
+#aoNeedsSellerAccessModal .btn:not(.secondary) {
+  background:var(--ui-button)!important;
+  background-image:none!important;
+  color:var(--ui-button-text)!important;
+  border:1px solid var(--ui-button)!important;
+  font-family:inherit!important;
+  text-shadow:none!important;
+  opacity:1!important;
+  box-shadow:none;
+}
+#aoSellerNotificationsModal .btn.secondary,
+#aoSellerDecisionResultModal .btn.secondary,
+#aoNeedsSellerAccessModal .btn.secondary,
+#aoSellerNotificationsModal .close,
+#aoSellerDecisionResultModal .close,
+#aoNeedsSellerAccessModal .close {
+  background:var(--soft)!important;
+  background-image:none!important;
+  color:var(--ink)!important;
+  border:1px solid var(--line)!important;
+  font-family:inherit!important;
+  text-shadow:none!important;
+  opacity:1!important;
+  box-shadow:none;
+}
+#aoSellerNotificationsModal .btn:not(.secondary):hover,
+#aoSellerDecisionResultModal .btn:not(.secondary):hover,
+#aoNeedsSellerAccessModal .btn:not(.secondary):hover {
+  filter:brightness(1.06);
+}
+#aoSellerNotificationsModal .btn.secondary:hover,
+#aoSellerDecisionResultModal .btn.secondary:hover,
+#aoNeedsSellerAccessModal .btn.secondary:hover,
+#aoSellerNotificationsModal .close:hover,
+#aoSellerDecisionResultModal .close:hover,
+#aoNeedsSellerAccessModal .close:hover {
+  background:var(--panel)!important;
+  color:var(--ink)!important;
+  border-color:var(--line)!important;
+  filter:none;
+}
+#aoSellerNotificationsModal .btn:disabled,
+#aoSellerDecisionResultModal .btn:disabled,
+#aoNeedsSellerAccessModal .btn:disabled {opacity:.65!important;cursor:not-allowed}
+#aoSellerNotificationsModal .btn,
+#aoSellerDecisionResultModal .btn,
+#aoNeedsSellerAccessModal .btn {
+  box-sizing:border-box;max-width:100%;min-height:43px;line-height:1.25;
+  overflow-wrap:anywhere;-webkit-tap-highlight-color:transparent;
+}
+#aoSellerNotificationsModal #aoStaffMarkAllRead.btn.secondary {
+  border-radius:2px!important;padding:13px 19px!important;
+}
+@media(max-width:520px){
+  #aoSellerNotificationsModal #aoStaffMarkAllRead.btn.secondary {
+    width:100%;min-height:44px;padding:12px 16px!important;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  #aoSellerNotificationsModal .btn,
+  #aoSellerDecisionResultModal .btn,
+  #aoNeedsSellerAccessModal .btn {transition:none!important}
+}
 </style>
 </body>
 <!-- AjayOutfits VERSION 95: admin can permanently delete approved or rejected reviews; existing theme tokens and typography retained. -->
