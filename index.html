@@ -2350,7 +2350,46 @@ document.addEventListener('click',e=>{
  open(button.getAttribute('data-edit-product'));
 },true);
 $('#sellerProductForm').addEventListener('submit',async e=>{e.preventDefault();await aoLoadRole();if(!aoCanSell()){toast('Seller access required');return}const name=$('#sellerProductName').value.trim(),brand=$('#sellerProductBrand').value.trim(),price=Number($('#sellerProductPrice').value),stock=Number($('#sellerProductStock').value),file=$('#sellerProductImageFile')?.files?.[0];if(!name||!brand||!(price>0)||!Number.isInteger(stock)||stock<0){toast('Check product details and stock quantity');return}if(file&&(!/^image\/(png|jpeg|webp|gif)$/.test(file.type)||file.size>2.5*1024*1024)){toast('Choose PNG, JPG, WEBP or GIF up to 2.5 MB');return}const shop=(aoCurrentRoleRow&&aoCurrentRoleRow.shop_name)||(aoIsAdmin()?'Ajay Outfits':(profile?.shopName||profile?.name||'Your shop'));let image=$('#sellerProductImage').value.trim();if(file){image=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=()=>reject(new Error('Could not read the selected image'));r.readAsDataURL(file)}).catch(err=>{toast(err.message);return ''});if(!image)return}const p={id:'seller-'+aoCurrentUser.id+'-'+Date.now(),sellerUserId:aoCurrentUser.id,brand,name,category:$('#sellerProductCategory').value,price,size:$('#sellerProductSize').value.trim()||'One size',stock,condition:'New',tag:'Seller listing',seller:shop,image:image||'https://placehold.co/600x700/ecece5/171815?text=AJAY+OUTFITS',isNew:true,desc:$('#sellerProductDesc').value.trim()||'A new listing from '+shop+'.'};try{await aoSaveProductToCloud(p)}catch(err){console.error('[Products] Seller publish failed:',err);toast('Product was not published: '+(err?.message||'Check database permissions and try again'));return}const newsletterSent=await aoNotifyNewsletterNewDrop(p);products.unshift(p);write('products',products);refreshBrandOptions();refreshCategoryOptions();renderProducts();updateAdmin();e.target.reset();$('#sellerProductStock').value='1';renderSellerDashboard();toast(newsletterSent?'Product listing published; newsletter subscribers notified':'Product listing published live; newsletter email could not be confirmed')});
-$('#sellerDashListing').addEventListener('click',async e=>{const b=e.target.closest('[data-seller-stock]');if(!b)return;if(!aoCanSell())return;const p=productById(b.dataset.sellerStock);if(!p)return;const current=Math.max(0,Number(p.stock??0));const value=prompt('Enter new stock quantity:',String(current));if(value===null)return;const n=Number(value);if(!Number.isInteger(n)||n<0||n>100000){toast('Enter a whole number from 0 to 100000');return}const updated={...p,stock:n};try{await aoSaveProductToCloud(updated);write('products',products);renderSellerDashboard();renderProducts();toast('Stock updated and synced live')}catch(err){console.error('[Products] Stock update failed:',err);toast('Stock was not updated: '+(err?.message||'Please try again'))}});
+$('#sellerDashListing').addEventListener('click',async e=>{
+ const b=e.target.closest('[data-seller-stock]');if(!b)return;
+ e.preventDefault();
+ if(!aoCanSell()){toast('Seller access required');return}
+ const id=String(b.dataset.sellerStock||'');let p=productById(id);if(!p){toast('Product not found. Refresh the dashboard and try again.');return}
+ const ownsCurrentProduct=()=>{const shop=(aoCurrentRoleRow&&aoCurrentRoleRow.shop_name)||profile?.shopName||profile?.name||'';return !!(aoCurrentUser&&p.sellerUserId&&String(p.sellerUserId)===String(aoCurrentUser.id))||(!p.sellerUserId&&!!shop&&p.seller===shop)};
+ if(!aoIsAdmin()&&!ownsCurrentProduct()){toast('You can update stock only for products belonging to your shop');return}
+ const current=Math.max(0,Number(p.stock??0));
+ const value=prompt('Enter new stock quantity:',String(current));if(value===null)return;
+ const n=Number(String(value).trim());if(!Number.isInteger(n)||n<0||n>100000){toast('Enter a whole number from 0 to 100000');return}
+ const db=window.ajaySupabase;if(!db){toast('Database connection is not ready. Please try again.');return}
+ const originalLabel=b.textContent;b.disabled=true;b.textContent='Updating…';
+ try{
+  await aoLoadRole();
+  p=productById(id)||p;
+  if(!aoCanSell()||(!aoIsAdmin()&&!ownsCurrentProduct()))throw new Error('Your seller session or product access could not be verified. Sign in again and retry.');
+  const updated={...p,stock:n,reserved:aoReservedStock(p)};
+  const now=new Date().toISOString();
+  // This is an existing product row: UPDATE avoids an upsert needing INSERT permission as well.
+  // RLS remains the server-side authority for whether this account may change this product.
+  const {data:saved,error}=await db.from('ao_products').update({data:updated,updated_at:now}).eq('id',id).select('id,data').single();
+  if(error)throw error;
+  if(!saved?.data)throw new Error('The database did not confirm the stock update. Check the ao_products UPDATE policy.');
+  const canonical={...saved.data};
+  const index=products.findIndex(item=>String(item.id)===id);
+  if(index<0)products.unshift(canonical);else products[index]=canonical;
+  aoLastSyncedProducts.set(id,aoRecordFingerprint(canonical));
+  write('products',products);
+  // Broadcast the confirmed database value so other signed-in sessions update immediately.
+  const broadcasted=await aoPublishProductBroadcast(canonical);
+  renderSellerDashboard();renderProducts();updateCounts();renderSearchSuggestions();
+  if(!broadcasted)console.warn('[Products] Stock saved, but fast broadcast is unavailable; database realtime is the fallback.');
+  toast('Stock updated successfully'+(broadcasted?' and synced live':''));
+ }catch(err){
+  console.error('[Products] Stock update failed:',err);
+  toast('Stock was not updated: '+(err?.message||'Please try again'));
+ }finally{
+  if(b.isConnected){b.disabled=false;b.textContent=originalLabel}
+ }
+});
 // Role model: one database role per account. Admin includes seller capabilities without assigning a second role.
 window.addEventListener('ao:auth-change',()=>{aoLoadRole();setTimeout(()=>aoSubscribeStoreRealtime(),180)});
 if(window.ajaySupabase){window.ajaySupabase.auth.onAuthStateChange((event)=>{if(event!=='SIGNED_OUT'&&(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl())))return;setTimeout(()=>{aoRefreshAuthUI();aoLoadRole();if(event==='SIGNED_IN')aoSubscribeStoreRealtime()},0)});aoSubscribeStoreRealtime();}
