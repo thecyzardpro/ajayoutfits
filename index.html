@@ -2979,6 +2979,7 @@ const visibleNotHidden=(list)=>list.filter(o=>!hiddenOrderIds().has(String(o.id)
 const tabMarkup=(scope,selected='active')=>`<div class="ao-order-tabs" role="tablist" aria-label="Order status filters"><button type="button" class="chip ${selected==='active'?'is-active':''}" data-ao-order-tab="active" data-ao-order-scope="${scope}">Active orders</button><button type="button" class="chip ${selected==='delivered'?'is-active':''}" data-ao-order-tab="delivered" data-ao-order-scope="${scope}">Delivered orders</button></div>`;
 const paymentMethodLabel=(v)=>window.aoPaymentMethodLabel?window.aoPaymentMethodLabel(v):'Payment method to be confirmed';
 const orderItems=(o)=>Array.isArray(o.items)?o.items:[];
+const orderItemIdentity=(i,index)=>String(i?.productId||i?.id||('line-'+index))+'::'+String(i?.sellerUserId||i?.sellerShopName||i?.seller||'')+'::'+String(index);
 const lineQty=(i)=>Math.max(1,Number(i.qty??i.quantity)||1);
 const linePrice=(i)=>Math.max(0,Number(i.price??i.unitPrice??i.unit_price??(typeof productById==='function'?productById(i.productId||i.id)?.price:0))||0);
 const computedOrderTotal=(o)=>{const sum=orderItems(o).reduce((n,i)=>n+lineQty(i)*linePrice(i),0);return orderItems(o).length?sum:Math.max(0,Number(o.total)||0)};
@@ -3001,6 +3002,12 @@ function statusSteps(status,history=[]){
  const outcome=terminal?'<div class="ao-track-outcome '+(current.trim().toLowerCase()==='cancelled'?'is-cancelled':'is-failed')+'">'+escAO(current.trim().toLowerCase()==='cancelled'?'Order cancelled':'Delivery failed')+'</div>':'';
  return outcome+'<div class="ao-track-steps">'+progress.map((step,i)=>'<span class="ao-track-step '+((currentIndex>=i&&currentIndex>=0)?'is-done':'')+'"><strong>'+escAO(step)+'</strong>'+(dateFor(step)?'<small>'+escAO(dateFor(step))+'</small>':'')+'</span>').join('')+'</div>';
 }
+function sellerProgressMarkup(items){
+ const groups=new Map();
+ items.forEach((item,index)=>{const seller=String(item.sellerShopName||item.seller||'Store').trim()||'Store';const identity=String(item.sellerUserId||seller).toLowerCase();let row=groups.get(identity);if(!row){row={name:seller,total:0,delivered:0,paid:0};groups.set(identity,row)}row.total++;if(itemFulfilmentStatus(item).toLowerCase()==='delivered')row.delivered++;if(itemPaymentStatus(item).toLowerCase()==='paid')row.paid++;});
+ if(!groups.size)return '';
+ return `<div class="ao-admin-seller-progress"><strong>Seller progress</strong>${[...groups.values()].map(g=>`<div class="ao-admin-seller-progress-row"><span>${escAO(g.name)}</span><small>${g.delivered}/${g.total} Delivered · ${g.paid}/${g.total} Paid</small></div>`).join('')}</div>`;
+}
 function orderCard(o,mode){
  const staff=mode==='staff', sellerManager=staff&&!isAdmin()&&canSell(), adminManager=staff&&isAdmin(), items=visibleOrderItems(o,staff);
  const itemNames=items.map(i=>`${i.name||i.title||productById(i.productId||i.id)?.name||'Item'} × ${lineQty(i)}`).join(', ')||'Order items';
@@ -3017,17 +3024,17 @@ function orderCard(o,mode){
   const fulfilmentTime=i.fulfilmentUpdatedAt?new Date(i.fulfilmentUpdatedAt).toLocaleString():'';
   const fulfilmentMeta=(sellerManager||adminManager)?`<small class="ao-fulfilment-time">Delivery: ${escAO(itemStatus)}${fulfilmentTime?` · Updated ${escAO(fulfilmentTime)}`:''}</small>`:'';
   const paymentMeta=(sellerManager||adminManager)?`<small class="ao-fulfilment-time">${adminOwnLine?'Store':'Seller'} payment: ${escAO(itemPaymentStatus(i))}${i.paymentUpdatedAt?` · Updated ${escAO(new Date(i.paymentUpdatedAt).toLocaleString())}`:''}</small>`:'';
-  return `<div class="ao-order-meta">${escAO(itemName)} · Qty ${lineQty(i)} · ${fmtAO(linePrice(i)*lineQty(i))}${i.size?` · Size ${escAO(i.size)}`:''}${statusLabel}${fulfilmentMeta}${paymentMeta}${sellerControl}</div>`;
+  return `<div class="ao-order-meta">${escAO(itemName)} · Qty ${lineQty(i)} · ${fmtAO(linePrice(i)*lineQty(i))}${adminManager?` · Seller: ${escAO(i.sellerShopName||i.seller||'Store')}`:''}${i.size?` · Size ${escAO(i.size)}`:''}${statusLabel}${fulfilmentMeta}${paymentMeta}${sellerControl}</div>`;
  }).join('');
  const deliveryBits=[o.delivery==='pickup'?'Pickup':'Delivery',o.address,o.city,o.country].filter(Boolean).map(escAO).join(', ');
  const statusOptions=STATUS_FLOW.map(s=>`<option value="${s}" ${orderStatus(o)===s?'selected':''} ${s==='Completed'&&!allItemsReadyForCompletion(o)?'disabled':''}>${s==='Completed'&&!allItemsReadyForCompletion(o)?'Completed · requires all sellers Delivered + Paid':s}</option>`).join('');
  const paymentOptions=PAYMENT_FLOW.map(s=>`<option value="${s}" ${paymentStatus(o)===s?'selected':''}>${s}</option>`).join('');
  if(!staff){
   const placed=new Date(o.date||Date.now()).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
-  const customerItems=items.map(i=>{const status=String(i.fulfilmentStatus||'Order Received');const when=i.fulfilmentUpdatedAt?new Date(i.fulfilmentUpdatedAt).toLocaleString():'';const history=Array.isArray(i.fulfilmentHistory)?i.fulfilmentHistory.slice(-4):[];const historyHtml=history.length?`<small class="ao-customer-fulfilment-history">${history.map(h=>`${escAO(h.status||'Updated')}${h.at?` · ${escAO(new Date(h.at).toLocaleString())}`:''}`).join(' → ')}</small>`:'';return `<div class="ao-customer-item"><span>${escAO(i.name||i.title||productById(i.productId||i.id)?.name||'Item')} <small>× ${lineQty(i)}</small><small class="ao-customer-fulfilment">Seller tracking: ${escAO(status)} · Payment: ${escAO(itemPaymentStatus(i))}${when?` · ${escAO(when)}`:''}</small>${historyHtml}</span><strong>${fmtAO(linePrice(i)*lineQty(i))}</strong></div>`}).join('');
+  const customerItems=items.map(i=>{const status=String(i.fulfilmentStatus||'Order Received');const when=i.fulfilmentUpdatedAt?new Date(i.fulfilmentUpdatedAt).toLocaleString():'';const history=Array.isArray(i.fulfilmentHistory)?i.fulfilmentHistory.slice(-4):[];const historyHtml=history.length?`<small class="ao-customer-fulfilment-history">${history.map(h=>`${escAO(h.status||'Updated')}${h.at?` · ${escAO(new Date(h.at).toLocaleString())}`:''}`).join(' → ')}</small>`:'';return `<div class="ao-customer-item" data-ao-order-item-card="${escAO(orderItemIdentity(i,items.indexOf(i)))}"><span>${escAO(i.name||i.title||productById(i.productId||i.id)?.name||'Item')} <small>× ${lineQty(i)}</small><small class="ao-customer-fulfilment">Seller tracking: ${escAO(status)} · Payment: ${escAO(itemPaymentStatus(i))}${when?` · ${escAO(when)}`:''}</small>${historyHtml}</span><strong>${fmtAO(linePrice(i)*lineQty(i))}</strong></div>`}).join('');
   return `<article class="ao-customer-order-card" data-ao-order-card="${escAO(o.id)}"><div class="ao-customer-order-head"><div><span class="ao-customer-order-kicker">ORDER REFERENCE</span><h3>${escAO(o.id)}</h3><p>Placed ${escAO(placed)}</p></div><span class="ao-customer-status ${orderComplete(o)?'is-complete':''}">${escAO(orderStatus(o))}</span></div><div class="ao-customer-items">${customerItems||`<div class="ao-customer-item"><span>Order items</span><strong>${fmtAO(visibleOrderTotal(o,items))}</strong></div>`}</div><div class="ao-customer-order-info"><div><span>Delivery</span><strong>${escAO(o.delivery==='pickup'?'Pickup':(o.delivery||'Delivery'))}</strong></div><div><span>Payment</span><strong>${escAO(paymentMethodLabel(o.paymentMethod))} · ${escAO(paymentStatus(o))}</strong></div></div><div class="ao-customer-order-total"><span>Order total</span><strong>${fmtAO(visibleOrderTotal(o,items))}</strong></div><div class="ao-customer-order-progress"><span>Order progress</span>${statusSteps(orderStatus(o),o.statusHistory)}</div>${receiptAvailable(o)?`<div class="ao-customer-order-actions"><button type="button" class="btn primary" data-ao-receipt="${escAO(o.id)}">View / export receipt</button>${orderComplete(o)?`<button type="button" class="btn secondary" data-ao-hide-order="${escAO(o.id)}">Remove from my list</button>`:''}</div>`:''}</article>`;
  }
- return `<article class="ao-order-card" data-ao-order-card="${escAO(o.id)}"><div class="ao-order-top"><div><div class="ao-order-title">${escAO(o.id)} · ${fmtAO(visibleOrderTotal(o,items))}</div><div class="ao-order-meta"><strong>Customer:</strong> ${escAO(o.name||'Customer')} · ${escAO(o.email||'')}<br><strong>Placed:</strong> ${escAO(new Date(o.date||Date.now()).toLocaleString())}${deliveryBits?`<br><strong>${escAO(deliveryBits)}</strong>`:''}<br>${escAO(itemNames)}</div>${itemDetails}</div><div><span class="ao-status-pill">${escAO(orderStatus(o))}</span><div class="ao-order-meta">Payment: ${escAO(paymentStatus(o))} · ${escAO(paymentMethodLabel(o.paymentMethod))}</div></div></div>${adminManager?statusSteps(orderStatus(o),o.statusHistory):''}${adminManager?`<div class="ao-order-actions"><label>Status <select data-ao-status="${escAO(o.id)}">${statusOptions}</select></label><label>Payment <select data-ao-payment="${escAO(o.id)}">${paymentOptions}</select></label>${receiptAvailable(o)?`<button type="button" class="chip" data-ao-receipt="${escAO(o.id)}">Generate receipt</button>`:''}${orderDelivered(o)?`<button type="button" class="chip" data-ao-hide-order="${escAO(o.id)}">Remove from view</button>`:''}</div>`:sellerManager?`<div class="ao-order-meta">Update delivery and payment for your own product lines only. Admin completes the order and issues the receipt after every seller is Delivered and Paid.</div>`:''}</article>`;
+ return `<article class="ao-order-card" data-ao-order-card="${escAO(o.id)}"><div class="ao-order-top"><div><div class="ao-order-title">${escAO(o.id)} · ${fmtAO(visibleOrderTotal(o,items))}</div><div class="ao-order-meta"><strong>Customer:</strong> ${escAO(o.name||'Customer')} · ${escAO(o.email||'')}<br><strong>Placed:</strong> ${escAO(new Date(o.date||Date.now()).toLocaleString())}${deliveryBits?`<br><strong>${escAO(deliveryBits)}</strong>`:''}<br>${escAO(itemNames)}</div>${itemDetails}</div><div><span class="ao-status-pill">${escAO(orderStatus(o))}</span><div class="ao-order-meta">Payment: ${escAO(paymentStatus(o))} · ${escAO(paymentMethodLabel(o.paymentMethod))}</div></div></div>${adminManager?statusSteps(orderStatus(o),o.statusHistory):''}${adminManager?sellerProgressMarkup(items):''}${adminManager?`<div class="ao-order-actions"><label>Status <select data-ao-status="${escAO(o.id)}">${statusOptions}</select></label><label>Payment <select data-ao-payment="${escAO(o.id)}">${paymentOptions}</select></label>${receiptAvailable(o)?`<button type="button" class="chip" data-ao-receipt="${escAO(o.id)}">Generate receipt</button>`:''}${orderDelivered(o)?`<button type="button" class="chip" data-ao-hide-order="${escAO(o.id)}">Remove from view</button>`:''}</div>`:sellerManager?`<div class="ao-order-meta">Update delivery and payment for your own product lines only. Admin completes the order and issues the receipt after every seller is Delivered and Paid.</div>`:''}</article>`;
 }
 function renderCustomerOrders(){
  const host=$ao('#aoCustomerOrdersList');if(!host)return;
@@ -3217,7 +3224,7 @@ function receiptUrl(o){
 }
 async function showReceipt(id){
  const o=allOrders().find(x=>String(x.id)===String(id));if(!o)return;
- if(!receiptAvailable(o)){if(typeof showInfo==='function')showInfo('Receipt not available yet','<p>Your receipt will be available once the order is marked <b>Delivered</b> or <b>Completed</b>.</p>');return;}
+ if(!receiptAvailable(o)){if(typeof showInfo==='function')showInfo('Receipt not available yet','<p>Your official receipt will be available after every item is marked <b>Delivered</b> and <b>Paid</b>, then the administrator marks the order <b>Completed</b>.</p>');return;}
  currentReceiptOrder=o;ensureModal();
  const logo=$ao('.header .logo-brand img')||$ao('.footer .logo-brand img')||$ao('#ao-splash img');const logoSrc=logo?logo.src:'';
  const items=orderItems(o).map(i=>{const qty=lineQty(i),price=linePrice(i);return `<tr><td><strong>${escAO(i.name||i.title||i.productName||'Unnamed item')}</strong>${(i.brand)?`<br><small>${escAO(i.brand)}</small>`:''}</td><td>${qty}</td><td>${fmtAO(price)}</td><td>${fmtAO(price*qty)}</td></tr>`}).join('')||'<tr><td colspan="4">No item details were saved with this order.</td></tr>';
@@ -3256,6 +3263,7 @@ function upsertRealtimeOrder(row){
  const ix=allOrders().findIndex(o=>String(o.id)===id);
  if(ix>=0)orders[ix]=incoming;else orders.push(incoming);
  renderCustomerOrders();renderStaffOrders();
+ try{window.dispatchEvent(new CustomEvent('ao:orders-updated',{detail:{orderId:id}}))}catch(_){}
  if(typeof updateAdmin==='function')updateAdmin();
  if(typeof renderSellerDashboard==='function')renderSellerDashboard();
 }
@@ -4193,6 +4201,16 @@ html[data-theme="dark"] #aoSellerNotificationsModal .ao-notify-item{background:v
 </style>
 
 
+
+<style id="ao-v132-admin-seller-progress-theme">
+.ao-admin-seller-progress{display:grid;gap:6px;margin:10px 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--ink);font:inherit}
+.ao-admin-seller-progress>strong{font-size:11px;font-weight:750;letter-spacing:.01em}
+.ao-admin-seller-progress-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11px;line-height:1.4}
+.ao-admin-seller-progress-row span{font-weight:650;overflow-wrap:anywhere}
+.ao-admin-seller-progress-row small{color:var(--muted);font:inherit;font-size:10px}
+html[data-theme="dark"] .ao-admin-seller-progress{background:var(--panel);border-color:var(--line);color:var(--ink)}
+@media(max-width:600px){.ao-admin-seller-progress{padding:9px 10px}.ao-admin-seller-progress-row{align-items:flex-start;flex-direction:column;gap:2px}}
+</style>
 <style id="ao-customer-notification-center-final-polish">
 /* Customer order updates now live only in the top notification center, never in My Orders. */
 #aoCustomerOrderNoticePanel,.ao-customer-notice-panel{display:none!important}
@@ -4299,17 +4317,17 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .modalbox,html[data-theme=
   wasOrdersOpen=open;
  }
  let lastDataSig='';
+ function itemIdentity(item,index){return String(item?.productId||item?.id||('line-'+index))+'::'+String(item?.sellerUserId||item?.sellerShopName||item?.seller||'')+'::'+String(index)}
+ function itemState(item){return JSON.stringify([String(item?.fulfilmentStatus||item?.fulfillmentStatus||item?.fulfilment_status||item?.fulfillment_status||'Order Received'),String(item?.paymentStatus||item?.payment_status||'Pending')])}
  function refreshCustomerState(){
-  // Customer-only collector: persist unread notices when an owned order is first added
-  // after baseline or when its status/payment changes. The notification center renders
-  // this state independently, so opening the dialog never toggles/closes it.
+  // Customer-only collector: compare each purchased seller line independently.
+  // Realtime order hydration calls this immediately; a short polling fallback remains.
   if(uid()==='guest')return;
-  let d;try{d=JSON.parse(localStorage.getItem(key())||'{"baseline":false,"states":{},"unread":[]}')}catch(_){d={baseline:false,states:{},unread:[]}}
+  let d;try{d=JSON.parse(localStorage.getItem(key())||'{"baseline":false,"states":{},"itemStates":{},"unread":[]}')}catch(_){d={baseline:false,states:{},itemStates:{},unread:[]}}
   d.states=d.states&&typeof d.states==='object'?d.states:{};
+  d.itemStates=d.itemStates&&typeof d.itemStates==='object'?d.itemStates:{};
   d.unread=Array.isArray(d.unread)?d.unread:[];
   if(roleStaff()){
-   // Pause customer order tracking while this same account is operating as seller/admin.
-   // The first customer pass after role revocation will quietly rebuild the baseline.
    if(!d.suspendedForStaff){d.suspendedForStaff=true;try{localStorage.setItem(key(),JSON.stringify(d))}catch(_){}}
    return;
   }
@@ -4317,47 +4335,52 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .modalbox,html[data-theme=
   const mine=allOrders().filter(ownOrder);
   let changed=false;
   if(!window.__aoInitialOrderHydrationComplete)return;
-  if(!d.baseline||d.suspendedForStaff){
-   // Existing orders may have changed while the account was in staff mode; do not
-   // misreport those historical staff-side changes as fresh customer notifications.
-   d.states={};for(const o of mine){const id=idOf(o);if(id)d.states[id]=stateOf(o)}
-   d.baseline=true;d.suspendedForStaff=false;changed=true;
-  }else{
+  const baseline=!d.baseline||d.suspendedForStaff;
+  if(baseline){d.states={};d.itemStates={};for(const o of mine){const id=idOf(o);if(!id)continue;d.states[id]=stateOf(o);const snapshot={};(Array.isArray(o.items)?o.items:[]).forEach((item,index)=>snapshot[itemIdentity(item,index)]=itemState(item));d.itemStates[id]=snapshot;}d.baseline=true;d.suspendedForStaff=false;changed=true;}
+  else{
    for(const o of mine){
     const id=idOf(o);if(!id)continue;
     const st=stateOf(o),prev=d.states[id];
+    const lines=Array.isArray(o.items)?o.items:[],previousLines=d.itemStates[id]&&typeof d.itemStates[id]==='object'?d.itemStates[id]:{},nextLines={};
     if(prev===undefined){
-     // A new order arriving after initial hydration belongs to this customer.
      const noticeKey=id+'|'+st;
      if(!viewedOrders.has(id)&&!d.unread.includes(noticeKey))d.unread.push(noticeKey);
-     if(viewedOrders.has(id))d.unread=d.unread.filter(raw=>String(raw).split('|')[0]!==id);
-     d.states[id]=st;changed=true;continue;
+     d.states[id]=st;
+     lines.forEach((item,index)=>nextLines[itemIdentity(item,index)]=itemState(item));
+     d.itemStates[id]=nextLines;changed=true;continue;
     }
-    if(prev!==st){
-     // Keep the newest status/payment notice; the center validates this against live order data.
-     const noticeKey=id+'|'+st;
-     if(!viewedOrders.has(id)&&!d.unread.includes(noticeKey))d.unread.push(noticeKey);
-     if(viewedOrders.has(id))d.unread=d.unread.filter(raw=>String(raw).split('|')[0]!==id);
-     d.states[id]=st;changed=true;
-    }
+    lines.forEach((item,index)=>{
+     const identity=itemIdentity(item,index),next=itemState(item),old=previousLines[identity];
+     if(old!==undefined&&old!==next&&!viewedOrders.has(id)){
+      const marker=id+'|item:'+encodeURIComponent(identity)+'|';
+      d.unread=d.unread.filter(raw=>!String(raw).startsWith(marker));
+      const noticeKey=marker+next;
+      if(!d.unread.includes(noticeKey))d.unread.push(noticeKey);
+     }
+     nextLines[identity]=next;
+    });
+    if(prev!==st){const noticeKey=id+'|'+st;if(!viewedOrders.has(id)&&!d.unread.includes(noticeKey))d.unread.push(noticeKey);d.states[id]=st;changed=true;}
+    if(JSON.stringify(previousLines)!==JSON.stringify(nextLines)){d.itemStates[id]=nextLines;changed=true;}
    }
   }
-  // Opening a specific order marks only that order's pending updates as read.
   if(viewedOrders.size){const before=d.unread.length;d.unread=d.unread.filter(raw=>!viewedOrders.has(String(raw).split('|')[0]));if(d.unread.length!==before)changed=true;}
-  // Drop entries for orders no longer owned/available and de-duplicate without deleting
-  // other customers' state (each customer's storage key is isolated by uid).
-  const valid=new Map(mine.map(o=>[idOf(o),stateOf(o)]));
+  const valid=new Map(mine.map(o=>[idOf(o),o]));
   const cleaned=[];
   for(const raw of d.unread){
    const k=String(raw),sep=k.indexOf('|');if(sep<1)continue;
-   const id=k.slice(0,sep),st=k.slice(sep+1);
-   if(valid.has(id)&&valid.get(id)===st&&!cleaned.includes(k))cleaned.push(k);
+   const id=k.slice(0,sep),tail=k.slice(sep+1),o=valid.get(id);if(!o)continue;
+   if(tail.startsWith('item:')){
+    const nextSep=tail.indexOf('|');if(nextSep<0)continue;
+    let identity='';try{identity=decodeURIComponent(tail.slice(5,nextSep))}catch(_){continue}
+    const item=(Array.isArray(o.items)?o.items:[]).find((line,index)=>itemIdentity(line,index)===identity);
+    if(!item||itemState(item)!==tail.slice(nextSep+1)||cleaned.includes(k))continue;
+    cleaned.push(k);
+   }else if(stateOf(o)===tail&&!cleaned.includes(k))cleaned.push(k);
   }
   if(cleaned.length!==d.unread.length||cleaned.some((v,i)=>v!==d.unread[i]))changed=true;
   d.unread=cleaned.slice(-300);
-  if(changed){try{localStorage.setItem(key(),JSON.stringify(d))}catch(_){}}
-  const b=$('#aoCustomerTopCount');
-  if(b){b.textContent=d.unread.length>99?'99+':String(d.unread.length);b.hidden=!d.unread.length}
+  if(changed){try{localStorage.setItem(key(),JSON.stringify(d))}catch(_){}try{window.dispatchEvent(new CustomEvent('ao:customer-notifications-updated'))}catch(_){}}
+  const b=$('#aoCustomerTopCount');if(b){b.textContent=d.unread.length>99?'99+':String(d.unread.length);b.hidden=!d.unread.length}
  }
  window.aoRefreshCustomerOrderNotices=refreshCustomerState;
  function refreshOpenStaff(){
@@ -4372,6 +4395,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .modalbox,html[data-theme=
  const tick=()=>{refreshCustomerState();refreshOpenStaff()};
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick()});
  window.addEventListener('focus',tick);
+ window.addEventListener('ao:orders-updated',tick);
  setInterval(()=>{if(!document.hidden&&(uid()!=='guest'||roleStaff()))tick()},5000);
  const oldUpsert=window.upsertRealtimeOrder;
  if(typeof oldUpsert==='function'&&!oldUpsert.__aoLiveNotificationsWrapped){const wrapped=function(...args){const r=oldUpsert.apply(this,args);setTimeout(tick,0);return r};wrapped.__aoLiveNotificationsWrapped=true;window.upsertRealtimeOrder=wrapped}
@@ -4383,11 +4407,11 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .modalbox,html[data-theme=
 <style id="ao-customer-order-notification-focus-polish">
 /* Match the staff order-focus treatment while respecting the active theme. */
 #aoOrdersModal [data-ao-order-card]{scroll-margin-block:100px 28px;scroll-margin-inline:12px}
-#aoOrdersModal [data-ao-order-card].ao-notification-target-order{position:relative;outline:2px solid var(--accent,var(--ink,#17191d))!important;outline-offset:3px;box-shadow:0 0 0 5px color-mix(in srgb,var(--accent,var(--ink,#17191d)) 14%,transparent),0 12px 28px rgba(0,0,0,.09)!important;animation:aoCustomerOrderTargetPulse 1.15s ease-in-out 2;z-index:1}
+#aoOrdersModal [data-ao-order-card].ao-notification-target-order,#aoOrdersModal [data-ao-order-item-card].ao-notification-target-order{position:relative;outline:2px solid var(--accent,var(--ink,#17191d))!important;outline-offset:3px;box-shadow:0 0 0 5px color-mix(in srgb,var(--accent,var(--ink,#17191d)) 14%,transparent),0 12px 28px rgba(0,0,0,.09)!important;animation:aoCustomerOrderTargetPulse 1.15s ease-in-out 2;z-index:1}
 @keyframes aoCustomerOrderTargetPulse{0%,100%{outline-offset:3px}50%{outline-offset:6px}}
-html[data-theme="dark"] #aoOrdersModal [data-ao-order-card].ao-notification-target-order{box-shadow:0 0 0 5px color-mix(in srgb,var(--accent,#fff) 18%,transparent),0 12px 28px rgba(0,0,0,.28)!important}
-@media(max-width:600px){#aoOrdersModal [data-ao-order-card]{scroll-margin-block:84px 20px}#aoOrdersModal [data-ao-order-card].ao-notification-target-order{outline-offset:2px}}
-@media(prefers-reduced-motion:reduce){#aoOrdersModal [data-ao-order-card].ao-notification-target-order{animation:none!important;scroll-behavior:auto!important}}
+html[data-theme="dark"] #aoOrdersModal [data-ao-order-card].ao-notification-target-order,html[data-theme="dark"] #aoOrdersModal [data-ao-order-item-card].ao-notification-target-order{box-shadow:0 0 0 5px color-mix(in srgb,var(--accent,#fff) 18%,transparent),0 12px 28px rgba(0,0,0,.28)!important}
+@media(max-width:600px){#aoOrdersModal [data-ao-order-card]{scroll-margin-block:84px 20px}#aoOrdersModal [data-ao-order-card].ao-notification-target-order,#aoOrdersModal [data-ao-order-item-card].ao-notification-target-order{outline-offset:2px}}
+@media(prefers-reduced-motion:reduce){#aoOrdersModal [data-ao-order-card].ao-notification-target-order,#aoOrdersModal [data-ao-order-item-card].ao-notification-target-order{animation:none!important;scroll-behavior:auto!important}}
 </style>
 
 
@@ -4486,18 +4510,23 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
  function items(){
   const d=read(),mineOrders=owned(),byId=new Map();
   for(const o of mineOrders){const id=orderId(o);if(id)byId.set(id,o)}
-  const latest=new Map();
+  const latestOrders=new Map(),latestLines=new Map();
+  const lineIdentity=(item,index)=>String(item?.productId||item?.id||('line-'+index))+'::'+String(item?.sellerUserId||item?.sellerShopName||item?.seller||'')+'::'+String(index);
+  const lineState=item=>JSON.stringify([String(item?.fulfilmentStatus||item?.fulfillmentStatus||item?.fulfilment_status||item?.fulfillment_status||'Order Received'),String(item?.paymentStatus||item?.payment_status||'Pending')]);
   for(const raw of (Array.isArray(d.unread)?d.unread:[])){
    const k=String(raw),sep=k.indexOf('|');if(sep<1)continue;
-   const id=k.slice(0,sep),o=byId.get(id);if(!o)continue;
-   const expected=id+'|'+JSON.stringify([status(o),pay(o)]);
-   if(k!==expected)continue;
-   // Keep one current-state notice per order; never count old statuses or orders owned by another customer.
-   latest.set(id,expected);
+   const id=k.slice(0,sep),tail=k.slice(sep+1),o=byId.get(id);if(!o)continue;
+   if(tail.startsWith('item:')){
+    const nextSep=tail.indexOf('|');if(nextSep<0)continue;let identity='';try{identity=decodeURIComponent(tail.slice(5,nextSep))}catch(_){continue}
+    const item=(Array.isArray(o.items)?o.items:[]).find((line,index)=>lineIdentity(line,index)===identity);if(!item||lineState(item)!==tail.slice(nextSep+1))continue;
+    latestLines.set(id+'|'+identity,{id,key:k,kind:'order-item',order:o,item,productId:identity,title:`${String(item.sellerShopName||item.seller||'Seller')} updated ${String(item.name||item.title||'your item')}`,detail:`Order ${id} · ${String(item.fulfilmentStatus||item.fulfillmentStatus||item.fulfilment_status||item.fulfillment_status||'Order Received')} · Payment ${String(item.paymentStatus||item.payment_status||'Pending')}`});
+   }else{
+    const expected=id+'|'+JSON.stringify([status(o),pay(o)]);if(k===expected)latestOrders.set(id,{id,key:k,kind:'order',order:o,title:'Your order update',detail:`Order ${id} · ${status(o)} · Payment ${pay(o)}`});
+   }
   }
-  const clean=[...latest.values()];
+  const clean=[...latestOrders.values(),...latestLines.values()].map(n=>n.key);
   if(JSON.stringify(d.unread||[])!==JSON.stringify(clean)){d.unread=clean;save(d)}
-  const orderItems=[...latest.keys()].map(id=>{const o=byId.get(id);return {id,key:latest.get(id),kind:'order',order:o,title:'Your order update',detail:`Order ${id} · ${status(o)} · Payment ${pay(o)}`}}).reverse();
+  const orderItems=[...latestOrders.values(),...latestLines.values()].reverse();
   const u=current(),email=norm(u?.email||(typeof profile!=='undefined'?profile?.email:''));
   const appByDecision=new Map();
   const myApplications=allApps().filter(a=>String(a.user_id||'')===String(u?.id||'')||!!(a.email&&email&&norm(a.email)===email)).sort((a,b)=>(Date.parse(b.updated_at||b.reviewed_at||b.created_at||'')||0)-(Date.parse(a.updated_at||a.reviewed_at||a.created_at||'')||0));
@@ -4514,7 +4543,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
  }
  let customerListSignature='';
  function sync(){if(admin()||!signed()){document.querySelector('#aoCustomerTopBell')?.remove();document.querySelector('#aoCustomerNotificationsModal')?.remove();if(!signed()){customerListSignature='';const channel=customerDecisionChannel;customerDecisionChannel=null;customerRealtimeUser='';if(channel&&window.ajaySupabase?.removeChannel)window.ajaySupabase.removeChannel(channel).catch(()=>{});}return;}bell();connectDecisionRealtime();const allItems=items(),list=seller()?allItems.filter(n=>n.kind==='application'):allItems,count=list.length;const b=$('#aoCustomerTopCount');if(b){const display=count>99?'99+':String(count);if(b.textContent!==display)b.textContent=display;b.hidden=!count}const m=$('#aoCustomerNotificationsModal');if(m?.classList.contains('show'))renderList(m,list)}
- function renderList(m,list){const host=m.querySelector('#aoCustomerNotificationList');if(!host)return;const signature=JSON.stringify(list.map(n=>[n.kind,n.id,n.key,n.title,n.detail]));if(signature===customerListSignature&&host.dataset.renderSignature===signature)return;customerListSignature=signature;host.dataset.renderSignature=signature;host.innerHTML=list.length?list.map(n=>n.kind==='application'?`<button type="button" class="ao-notify-item" data-customer-notice-kind="application" data-customer-application-id="${esc(n.id)}" data-customer-notice-key="${esc(n.key)}"><span class="ao-notify-dot" aria-hidden="true"></span><span><b>${esc(n.title)}</b><small>${esc(n.detail)}</small></span></button>`:`<button type="button" class="ao-notify-item" data-customer-order-id="${esc(n.id)}"><span class="ao-notify-dot" aria-hidden="true"></span><span><b>${esc(n.title)}</b><small>${esc(n.detail)}</small></span></button>`).join(''):'<div class="ao-notifications-empty">You are all caught up. New updates will appear here automatically.</div>';const mark=m.querySelector('#aoCustomerMarkAllRead');if(mark){mark.hidden=!list.length;mark.onclick=()=>{const d=read();d.unread=[];save(d);const u=current(),email=norm(u?.email||(typeof profile!=='undefined'?profile?.email:''));allApps().filter(a=>String(a.user_id||'')===String(u?.id||'')||!!(a.email&&email&&norm(a.email)===email)).forEach(a=>{const dec=a.decision_notification;if(dec){const appId=String(a.id||a.user_id||a.email||''),stamp=decisionStamp(a),decisionStatus=decisionOf(a);try{localStorage.setItem(`ao_customer_seller_decision_read_${uid()}_${appId}_${stamp}_${decisionStatus}`,'1');localStorage.setItem(`ao_seller_decision_read_v1_${uid()}_${appId}_${stamp}_${decisionStatus}`,'1')}catch(_){}}});sync()}}host.querySelectorAll('[data-customer-notice-kind="application"]').forEach(btn=>btn.addEventListener('click',async()=>{
+ function renderList(m,list){const host=m.querySelector('#aoCustomerNotificationList');if(!host)return;const signature=JSON.stringify(list.map(n=>[n.kind,n.id,n.key,n.title,n.detail]));if(signature===customerListSignature&&host.dataset.renderSignature===signature)return;customerListSignature=signature;host.dataset.renderSignature=signature;host.innerHTML=list.length?list.map(n=>n.kind==='application'?`<button type="button" class="ao-notify-item" data-customer-notice-kind="application" data-customer-application-id="${esc(n.id)}" data-customer-notice-key="${esc(n.key)}"><span class="ao-notify-dot" aria-hidden="true"></span><span><b>${esc(n.title)}</b><small>${esc(n.detail)}</small></span></button>`:`<button type="button" class="ao-notify-item" data-customer-order-id="${esc(n.id)}"${n.kind==='order-item'?` data-customer-order-item-id="${esc(n.productId)}"`:''}><span class="ao-notify-dot" aria-hidden="true"></span><span><b>${esc(n.title)}</b><small>${esc(n.detail)}</small></span></button>`).join(''):'<div class="ao-notifications-empty">You are all caught up. New updates will appear here automatically.</div>';const mark=m.querySelector('#aoCustomerMarkAllRead');if(mark){mark.hidden=!list.length;mark.onclick=()=>{const d=read();d.unread=[];save(d);const u=current(),email=norm(u?.email||(typeof profile!=='undefined'?profile?.email:''));allApps().filter(a=>String(a.user_id||'')===String(u?.id||'')||!!(a.email&&email&&norm(a.email)===email)).forEach(a=>{const dec=a.decision_notification;if(dec){const appId=String(a.id||a.user_id||a.email||''),stamp=decisionStamp(a),decisionStatus=decisionOf(a);try{localStorage.setItem(`ao_customer_seller_decision_read_${uid()}_${appId}_${stamp}_${decisionStatus}`,'1');localStorage.setItem(`ao_seller_decision_read_v1_${uid()}_${appId}_${stamp}_${decisionStatus}`,'1')}catch(_){}}});sync()}}host.querySelectorAll('[data-customer-notice-kind="application"]').forEach(btn=>btn.addEventListener('click',async()=>{
   const appId=String(btn.dataset.customerApplicationId||''),readKey=String(btn.dataset.customerNoticeKey||'');
   if(readKey)try{localStorage.setItem(readKey,'1');const row=allApps().find(v=>String(v.id||v.user_id||v.email||'')===appId);if(row){const st=decisionOf(row);localStorage.setItem(`ao_seller_decision_read_v1_${uid()}_${appId}_${decisionStamp(row)}_${st}`,'1')}}catch(_){}
   let a=allApps().find(v=>String(v.id||v.user_id||v.email||'')===appId)||null;
@@ -4534,7 +4563,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
   if(a&&['Approved','Rejected','Disapproved'].includes(resolvedDecision)){const stamp=decisionStamp(a),freshReadKey=`ao_customer_seller_decision_read_${uid()}_${appId}_${stamp}_${resolvedDecision}`;try{localStorage.setItem(freshReadKey,'1');localStorage.setItem(`ao_seller_decision_read_v1_${uid()}_${appId}_${stamp}_${resolvedDecision}`,'1')}catch(_){}}
   const status=(freshLookupRequired&&!freshLookupSucceeded?'pending':resolvedDecision).toLowerCase();
   sync();m.classList.remove('show');showSellerDecision(a,dec,status);
- }));host.querySelectorAll('[data-customer-order-id]').forEach(btn=>btn.addEventListener('click',()=>{const id=String(btn.dataset.customerOrderId||'');if(!id)return;/* Mark every notice for this order read, not only the newest state. */const d=read();d.unread=(d.unread||[]).filter(k=>String(k).split('|')[0]!==id);save(d);sync();m.classList.remove('show');const ordersButton=$('#aoMyOrdersButton');if(ordersButton)ordersButton.click();else if(typeof window.openModal==='function')window.openModal('aoOrdersModal');else $('#aoTopOrders')?.click();/* The customer order card uses data-ao-order-card and has a separate delivered tab. Retry while the orders modal renders. */let tries=0;const focusOrder=()=>{tries++;const modal=$('#aoOrdersModal'),list=$('#aoCustomerOrdersList');if(!list){if(tries<12)setTimeout(focusOrder,180);return;}if(!modal?.classList.contains('show')){if(tries<12)setTimeout(focusOrder,180);return;}let card=[...list.querySelectorAll('[data-ao-order-card]')].find(c=>String(c.getAttribute('data-ao-order-card'))===id);if(!card&&tries<3){setTimeout(focusOrder,180);return;}if(!card){const delivered=list.querySelector('[data-ao-order-tab=delivered][data-ao-order-scope=customer]');if(delivered){delivered.click();setTimeout(focusOrder,180);return;}}card=[...list.querySelectorAll('[data-ao-order-card]')].find(c=>String(c.getAttribute('data-ao-order-card'))===id);if(card){card.classList.remove('ao-notification-target-order');void card.offsetWidth;card.classList.add('ao-notification-target-order');card.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center',inline:'nearest'});card.setAttribute('tabindex','-1');try{card.focus({preventScroll:true})}catch(_){try{card.focus()}catch(__){}}if(card._aoNotifyHighlightTimer)clearTimeout(card._aoNotifyHighlightTimer);card._aoNotifyHighlightTimer=setTimeout(()=>card.classList.remove('ao-notification-target-order'),3200);}};setTimeout(focusOrder,160);}));}
+ }));host.querySelectorAll('[data-customer-order-id]').forEach(btn=>btn.addEventListener('click',()=>{const id=String(btn.dataset.customerOrderId||''),lineId=String(btn.dataset.customerOrderItemId||'');if(!id)return;const d=read();d.unread=(d.unread||[]).filter(raw=>{const k=String(raw);if(k.split('|')[0]!==id)return true;if(!lineId)return false;return !k.startsWith(id+'|item:'+encodeURIComponent(lineId)+'|')});save(d);sync();m.classList.remove('show');const ordersButton=$('#aoMyOrdersButton');if(ordersButton)ordersButton.click();else if(typeof window.openModal==='function')window.openModal('aoOrdersModal');else $('#aoTopOrders')?.click();let tries=0;const focusOrder=()=>{tries++;const modal=$('#aoOrdersModal'),list=$('#aoCustomerOrdersList');if(!list||!modal?.classList.contains('show')){if(tries<12)setTimeout(focusOrder,180);return;}let card=[...list.querySelectorAll('[data-ao-order-card]')].find(c=>String(c.getAttribute('data-ao-order-card'))===id);if(!card&&tries<3){setTimeout(focusOrder,180);return;}if(!card){const delivered=list.querySelector('[data-ao-order-tab=delivered][data-ao-order-scope=customer]');if(delivered){delivered.click();setTimeout(focusOrder,180);return;}}card=[...list.querySelectorAll('[data-ao-order-card]')].find(c=>String(c.getAttribute('data-ao-order-card'))===id);if(card){const target=lineId?[...card.querySelectorAll('[data-ao-order-item-card]')].find(el=>String(el.getAttribute('data-ao-order-item-card'))===lineId):null;const focus=target||card;focus.classList.remove('ao-notification-target-order');void focus.offsetWidth;focus.classList.add('ao-notification-target-order');focus.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center',inline:'nearest'});focus.setAttribute('tabindex','-1');try{focus.focus({preventScroll:true})}catch(_){try{focus.focus()}catch(__){}}if(focus._aoNotifyHighlightTimer)clearTimeout(focus._aoNotifyHighlightTimer);focus._aoNotifyHighlightTimer=setTimeout(()=>focus.classList.remove('ao-notification-target-order'),3200);}};setTimeout(focusOrder,160);}));}
  function showSellerDecision(app,dec,status){
   let modal=$('#aoSellerDecisionResultModal');if(!modal){modal=document.createElement('div');modal.id='aoSellerDecisionResultModal';modal.className='modal';modal.innerHTML='<div class="modalbox" style="max-width:560px"><div class="drawer-head"><div><span class="eyebrow">AJAY OUTFITS · SELLER APPLICATION</span><h2 id="aoSellerDecisionTitle"></h2></div><button type="button" class="close" aria-label="Close message">×</button></div><p id="aoSellerDecisionMessage" style="line-height:1.7;color:var(--muted)"></p><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px"><button type="button" class="btn" id="aoSellerDecisionAction">Continue</button><button type="button" class="btn secondary" id="aoSellerDecisionClose">Close</button></div></div>';document.body.appendChild(modal);modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('show')});modal.querySelector('.close').addEventListener('click',()=>modal.classList.remove('show'));modal.querySelector('#aoSellerDecisionClose').addEventListener('click',()=>modal.classList.remove('show'));}
   const approved=status==='approved',revoked=status==='disapproved',rejected=status==='rejected',pending=!approved&&!revoked&&!rejected;const title=$('#aoSellerDecisionTitle'),message=$('#aoSellerDecisionMessage'),action=$('#aoSellerDecisionAction');
@@ -4575,7 +4604,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
  function open(){const m=ensureModal();renderList(m,items());m.classList.add('show')}
  document.addEventListener('click',e=>{if(e.target.closest('#aoMyOrdersButton,#aoDashboardOrders,#aoTopOrders'))setTimeout(sync,180)});
  const oldHydrate=window.hydrateAjayDataFromSupabase;if(typeof oldHydrate==='function'&&!oldHydrate.__aoCustomerBellWrapped){const wrapped=async function(...args){const r=await oldHydrate.apply(this,args);setTimeout(sync,0);return r};wrapped.__aoCustomerBellWrapped=true;window.hydrateAjayDataFromSupabase=wrapped}
- window.addEventListener('storage',e=>{if(e.key&&e.key.startsWith('ao_customer_order_notices_v3_'))sync()});window.addEventListener('ao:auth-change',()=>sync());window.addEventListener('ao-auth-state-changed',()=>sync());document.addEventListener('visibilitychange',()=>{if(!document.hidden){connectDecisionRealtime();refreshCustomerDecisionFromServer();sync()}});window.addEventListener('focus',()=>{connectDecisionRealtime();refreshCustomerDecisionFromServer();sync()});setInterval(()=>{if(!document.hidden)sync()},8000);setInterval(()=>{if(!document.hidden)refreshCustomerDecisionFromServer()},20000);connectDecisionRealtime();refreshCustomerDecisionFromServer();sync();
+ window.addEventListener('storage',e=>{if(e.key&&e.key.startsWith('ao_customer_order_notices_v3_'))sync()});window.addEventListener('ao:auth-change',()=>sync());window.addEventListener('ao-auth-state-changed',()=>sync());window.addEventListener('ao:customer-notifications-updated',sync);document.addEventListener('visibilitychange',()=>{if(!document.hidden){connectDecisionRealtime();refreshCustomerDecisionFromServer();sync()}});window.addEventListener('focus',()=>{connectDecisionRealtime();refreshCustomerDecisionFromServer();sync()});setInterval(()=>{if(!document.hidden)sync()},8000);setInterval(()=>{if(!document.hidden)refreshCustomerDecisionFromServer()},20000);connectDecisionRealtime();refreshCustomerDecisionFromServer();sync();
  // Header/auth UI can be mounted after this script runs. Observe that transition
  // so the customer bell appears immediately instead of waiting for the 8s poll.
  let bellBootObserver=null,bellBootTimer=null,bellBootTicks=0;
@@ -4783,12 +4812,13 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
   const btn=e.target?.closest?.('#aoCustomerNotificationList [data-customer-order-id]');
   if(!btn)return;
   e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
-  const id=String(btn.getAttribute('data-customer-order-id')||'');if(!id)return;
+  const id=String(btn.getAttribute('data-customer-order-id')||''),lineId=String(btn.getAttribute('data-customer-order-item-id')||'');if(!id)return;
   try{
    const storeKey=`ao_customer_order_notices_v3_${(window.aoCurrentUser?.id||window.aoCurrentUser?.email||'guest')}`;
    const d=JSON.parse(localStorage.getItem(storeKey)||'{"baseline":false,"states":{},"unread":[]}');
-   d.unread=(Array.isArray(d.unread)?d.unread:[]).filter(k=>String(k).split('|')[0]!==id);
+   d.unread=(Array.isArray(d.unread)?d.unread:[]).filter(raw=>{const k=String(raw);if(k.split('|')[0]!==id)return true;if(!lineId)return false;return !k.startsWith(id+'|item:'+encodeURIComponent(lineId)+'|')});
    localStorage.setItem(storeKey,JSON.stringify(d));
+   try{window.dispatchEvent(new CustomEvent('ao:customer-notifications-updated'))}catch(_){}
   }catch(_){}
   $('#aoCustomerNotificationsModal')?.classList.remove('show');
   const reduced=(()=>{try{return window.matchMedia('(prefers-reduced-motion: reduce)').matches}catch(_){return false}})();
@@ -4827,12 +4857,14 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
      return;
     }
     finish();
-    card.scrollIntoView({behavior:reduced?'auto':'smooth',block:'center',inline:'nearest'});
-    card.classList.remove('ao-notification-target-order');void card.offsetWidth;card.classList.add('ao-notification-target-order');
-    card.setAttribute('tabindex','-1');
-    try{card.focus({preventScroll:true})}catch(_){try{card.focus()}catch(__){}}
-    if(card._aoNotifyHighlightTimer)clearTimeout(card._aoNotifyHighlightTimer);
-    card._aoNotifyHighlightTimer=setTimeout(()=>card.classList.remove('ao-notification-target-order'),3600);
+    const target=lineId?[...card.querySelectorAll('[data-ao-order-item-card]')].find(el=>String(el.getAttribute('data-ao-order-item-card'))===lineId):null;
+    const focus=target||card;
+    focus.scrollIntoView({behavior:reduced?'auto':'smooth',block:'center',inline:'nearest'});
+    focus.classList.remove('ao-notification-target-order');void focus.offsetWidth;focus.classList.add('ao-notification-target-order');
+    focus.setAttribute('tabindex','-1');
+    try{focus.focus({preventScroll:true})}catch(_){try{focus.focus()}catch(__){}}
+    if(focus._aoNotifyHighlightTimer)clearTimeout(focus._aoNotifyHighlightTimer);
+    focus._aoNotifyHighlightTimer=setTimeout(()=>focus.classList.remove('ao-notification-target-order'),3600);
    };
    const scheduleLocate=()=>{if(queued||finished)return;queued=true;requestAnimationFrame(locate)};
    // Look immediately, then react to actual DOM changes instead of waking the CPU
@@ -5540,6 +5572,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
 }
 </style>
+<!-- AJAYOUTFITS v132: per-item customer order notifications, exact-line focus and admin seller progress -->
 </body>
 <!-- AjayOutfits VERSION 95: admin can permanently delete approved or rejected reviews; existing theme tokens and typography retained. -->
 </html>
