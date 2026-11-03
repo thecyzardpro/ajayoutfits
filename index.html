@@ -2985,7 +2985,7 @@ const linePrice=(i)=>Math.max(0,Number(i.price??i.unitPrice??i.unit_price??(type
 const computedOrderTotal=(o)=>{const sum=orderItems(o).reduce((n,i)=>n+lineQty(i)*linePrice(i),0);return orderItems(o).length?sum:Math.max(0,Number(o.total)||0)};
 const customerOrders=()=>{const u=activeUser();if(!u?.email)return [];return allOrders().filter(o=>emailKey(o.email)===emailKey(u.email)||o.customerUserId&&o.customerUserId===u.id).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));};
 const currentSellerShop=()=>((typeof aoCurrentRoleRow!=='undefined'&&aoCurrentRoleRow&&aoCurrentRoleRow.shop_name)||(typeof profile!=='undefined'&&profile&&profile.shopName)||(typeof profile!=='undefined'&&profile&&profile.name)||'');
-const itemOwnership=(i)=>{const p=typeof productById==='function'?productById(i.productId||i.id):null;return {userId:String(i?.sellerUserId||p?.sellerUserId||''),shop:String(i?.sellerShopName||i?.seller||p?.seller||'').trim().toLowerCase()};};
+const itemOwnership=(i)=>{const p=typeof productById==='function'?productById(i?.productId||i?.id):null;const hasLineOwner=!!i&&(Object.prototype.hasOwnProperty.call(i,'sellerUserId')||Object.prototype.hasOwnProperty.call(i,'sellerShopName')||Object.prototype.hasOwnProperty.call(i,'seller'));return {userId:String(hasLineOwner?(i?.sellerUserId||''):(p?.sellerUserId||'')),shop:String(hasLineOwner?(i?.sellerShopName||i?.seller||''):(p?.sellerShopName||p?.seller||'')).trim().toLowerCase()};};
 const sellerOwnsItem=(i)=>{const u=activeUser(),shop=currentSellerShop().trim().toLowerCase(),owner=itemOwnership(i);return !!((owner.userId&&u&&owner.userId===String(u.id))||(!owner.userId&&shop&&owner.shop===shop));};
 const adminOwnsItem=(i)=>{if(!isAdmin())return false;const u=activeUser(),owner=itemOwnership(i);if(owner.userId)return !!(u?.id&&owner.userId===String(u.id));if(owner.shop)return owner.shop==='ajay outfits'||owner.shop==='ajayoutfits';/* Legacy lines without seller metadata remain store-managed. */return true;};
 const ownSellerOrders=()=>{if(isAdmin())return allOrders();return allOrders().filter(o=>orderItems(o).some(sellerOwnsItem));};
@@ -3163,6 +3163,86 @@ async function updateAdminOwnedItem(orderId,productId,field,value,select){
  catch(err){if(previous.value===undefined)delete item[key];else item[key]=previous.value;if(previous.time===undefined)delete item[timeKey];else item[timeKey]=previous.time;if(historyKey){if(previous.history===undefined)delete item[historyKey];else item[historyKey]=previous.history;}order.updatedAt=previous.updatedAt;order.updatedBy=previous.updatedBy;order.updatedByRole=previous.updatedByRole;if(select)select.value=String(previous.value||(field==='fulfilment'?'Order Received':'Pending'));console.error('Admin-owned item update failed:',err);alert(err?.message||'The store item update could not be saved. Please try again.');}
  finally{if(select)select.disabled=false;}
 }
+
+// One-time, admin-only ownership migration for legacy seeded catalogue orders.
+// It preserves each line's delivery/payment history; the admin now manages these lines directly.
+let aoDefaultOwnershipMigrationInFlight=null;
+async function migrateLegacyDefaultOrderOwnership(){
+ if(!isAdmin())return {updatedOrders:0,updatedProducts:0,failed:0};
+ const db=window.ajaySupabase;
+ if(!db)return {updatedOrders:0,updatedProducts:0,failed:0};
+ if(aoDefaultOwnershipMigrationInFlight)return aoDefaultOwnershipMigrationInFlight;
+ aoDefaultOwnershipMigrationInFlight=(async()=>{
+  const seedIds=new Set((Array.isArray(seedProducts)?seedProducts:[]).map(p=>String(p.id)));
+  const seedNames=new Set((Array.isArray(seedProducts)?seedProducts:[]).map(p=>String(p.name||'').trim().toLowerCase()).filter(Boolean));
+  const isDefaultLine=item=>{
+   const productId=String(item?.productId||'').trim();
+   if(productId)return seedIds.has(productId);
+   const lineId=String(item?.id||'').trim();
+   if(lineId&&seedIds.has(lineId))return true;
+   return seedNames.has(String(item?.name||item?.title||'').trim().toLowerCase());
+  };
+  let updatedProducts=0,updatedOrders=0,failed=0;
+  // Normalize the cloud product records too, so itemOwnership cannot inherit a retired seller ID.
+  for(const product of products){
+   if(!product||!seedIds.has(String(product.id)))continue;
+   const changed=product.seller!=='Ajay Outfits'||product.sellerShopName!=='Ajay Outfits'||!!product.sellerUserId;
+   if(!changed)continue;
+   const previous={seller:product.seller,sellerShopName:product.sellerShopName,sellerUserId:product.sellerUserId};
+   product.seller='Ajay Outfits';product.sellerShopName='Ajay Outfits';product.sellerUserId=null;
+   try{
+    await aoSaveProductToCloud(product);
+    updatedProducts++;
+   }catch(error){
+    Object.assign(product,previous);
+    failed++;
+    console.warn('[Legacy orders] Could not reassign default product to Ajay Outfits:',product.id,error?.message||error);
+   }
+  }
+  for(const order of allOrders()){
+   const overall=String(orderStatus(order)).trim().toLowerCase();
+   if(['completed','cancelled','delivery failed'].includes(overall))continue;
+   const lines=orderItems(order);
+   if(!lines.length)continue;
+   const changes=[];
+   for(const item of lines){
+    if(!isDefaultLine(item))continue;
+    const previous={seller:item.seller,sellerShopName:item.sellerShopName,sellerUserId:item.sellerUserId};
+    const changed=item.seller!=='Ajay Outfits'||item.sellerShopName!=='Ajay Outfits'||!!item.sellerUserId;
+    if(!changed)continue;
+    changes.push({item,previous});
+    item.seller='Ajay Outfits';item.sellerShopName='Ajay Outfits';item.sellerUserId=null;
+   }
+   if(!changes.length)continue;
+   const oldUpdatedAt=order.updatedAt,oldUpdatedBy=order.updatedBy,oldUpdatedByRole=order.updatedByRole;
+   order.updatedAt=new Date().toISOString();
+   order.updatedBy=activeUser()?.id||'admin';
+   order.updatedByRole='admin';
+   try{
+    await updateOrderRow(order);
+    updatedOrders++;
+   }catch(error){
+    for(const change of changes)Object.assign(change.item,change.previous);
+    order.updatedAt=oldUpdatedAt;order.updatedBy=oldUpdatedBy;order.updatedByRole=oldUpdatedByRole;
+    failed++;
+    console.warn('[Legacy orders] Could not reassign active order items:',order.id,error?.message||error);
+   }
+  }
+  try{write('orders',allOrders())}catch(_){}
+  renderCustomerOrders();renderStaffOrders();
+  if(typeof updateAdmin==='function')updateAdmin();
+  if(typeof renderSellerDashboard==='function')renderSellerDashboard();
+  if(updatedOrders||updatedProducts){
+   console.info(`[Legacy orders] Ajay Outfits reassigned ${updatedOrders} active order(s) and ${updatedProducts} default product(s).`);
+   if(typeof toast==='function')toast(`Updated ${updatedOrders} active order(s) to Ajay Outfits`);
+  }
+  if(failed)console.warn(`[Legacy orders] ${failed} record(s) could not be migrated; they will be retried on the next admin refresh.`);
+  return {updatedOrders,updatedProducts,failed};
+ })().finally(()=>{aoDefaultOwnershipMigrationInFlight=null});
+ return aoDefaultOwnershipMigrationInFlight;
+}
+window.aoMigrateLegacyDefaultOrders=migrateLegacyDefaultOrderOwnership;
+
 async function refreshOrderSnapshot(db,orderId,rpcData){
  try{
   const {data,error}=await db.from('ao_orders').select('id,data').eq('id',String(orderId)).maybeSingle();
@@ -5862,3 +5942,23 @@ html[data-theme="dark"] .ao-seller-review-card{background:var(--panel);color:var
 @media(max-width:560px){.ao-seller-product-row>.ao-catalogue-actions{grid-column:1/-1!important;width:100%;min-width:0;justify-content:flex-start;gap:7px;padding:3px}.ao-seller-product-row .ao-catalogue-actions .chip{flex:0 0 auto;min-width:max-content;white-space:nowrap;overflow-wrap:normal;word-break:normal;min-height:38px;padding:8px 11px!important}#aoEditProductModal .ao-edit-image-preview img{width:76px;height:90px;flex-basis:76px}}
 @media(prefers-reduced-motion:reduce){#aoEditProductModal .ao-edit-image-preview,.ao-seller-product-row .ao-catalogue-actions .chip{transition:none!important}}
 </style>
+
+
+<script id="ao-v134-admin-default-order-ownership-migration">
+/* Run the legacy seeded-order reassignment only after an authenticated admin refreshes cloud data. */
+(function(){
+ 'use strict';
+ const original=window.hydrateAjayDataFromSupabase;
+ if(typeof original!=='function'||original.__aoV134OwnershipMigrationWrapped)return;
+ const wrapped=async function(...args){
+  const result=await original.apply(this,args);
+  if(window.aoIsAdmin?.()&&typeof window.aoMigrateLegacyDefaultOrders==='function'){
+   try{await window.aoMigrateLegacyDefaultOrders()}
+   catch(error){console.warn('[Legacy orders] Admin migration did not finish:',error?.message||error)}
+  }
+  return result;
+ };
+ wrapped.__aoV134OwnershipMigrationWrapped=true;
+ window.hydrateAjayDataFromSupabase=wrapped;
+})();
+</script>
