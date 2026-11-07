@@ -4215,7 +4215,20 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
    save(latest);updateBadges();modal.classList.remove('show');
    const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
    const focusNode=(node)=>{if(!node)return false;const hiddenSellerPanel=node.closest('[data-ao-seller-panel][hidden]');if(hiddenSellerPanel){const sellerRoot=hiddenSellerPanel.closest('[data-ao-seller-tabs]');sellerRoot?.querySelector(`[data-ao-seller-tab="${hiddenSellerPanel.dataset.aoSellerPanel}"]`)?.click();}node.scrollIntoView({behavior:reduced?'auto':'smooth',block:'center',inline:'nearest'});node.classList.remove('ao-notification-target-order');void node.offsetWidth;node.classList.add('ao-notification-target-order');node.setAttribute('tabindex','-1');try{node.focus({preventScroll:true})}catch(_){}if(node._aoNotifyHighlightTimer)clearTimeout(node._aoNotifyHighlightTimer);node._aoNotifyHighlightTimer=setTimeout(()=>node.classList.remove('ao-notification-target-order'),3600);return true};
-   const retryFocus=(finder,afterMissing)=>{let tries=0;const run=()=>{const node=finder();if(node){focusNode(node);return;}if(++tries<30)setTimeout(run,160);else if(afterMissing)afterMissing();};setTimeout(run,120)};
+   // Resolve notification targets immediately and observe real DOM changes.
+   // No repeated 160ms polling while order/application/review panels render.
+   const retryFocus=(finder,afterMissing)=>{
+    let finished=false,observer=null,timeout=null,frame=0;
+    const cleanup=()=>{finished=true;if(observer)observer.disconnect();if(timeout)clearTimeout(timeout);if(frame)cancelAnimationFrame(frame)};
+    const attempt=()=>{if(finished)return true;let node=null;try{node=finder()}catch(err){console.warn('[Notifications] target lookup failed:',err)}if(node){cleanup();focusNode(node);return true}return false};
+    if(attempt())return;
+    if(window.MutationObserver){
+     observer=new MutationObserver(()=>{if(finished||frame)return;frame=requestAnimationFrame(()=>{frame=0;attempt()})});
+     observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','class','aria-selected','data-ao-tab']});
+     if(attempt())return;
+    }
+    timeout=setTimeout(()=>{if(finished)return;cleanup();if(afterMissing)afterMissing()},6500);
+   };
    // Review notices route admins to moderation and sellers to their own review inbox.
    if(target==='product-review'||String(clickedKey).startsWith('review:')||String(clickedKey).startsWith('admin-review:')){
     const exactReviewId=reviewId||String(clickedKey).split(':').slice(1).join(':');
@@ -4265,7 +4278,7 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
     return;
    }
    if(target==='orders'||orderId||String(clickedKey).startsWith('order:')){
-    if(typeof window.aoOpenCustomerOrdersPage==='function')await window.aoOpenCustomerOrdersPage();
+    if(typeof window.aoOpenCustomerOrdersPage==='function'){try{Promise.resolve(window.aoOpenCustomerOrdersPage()).catch(err=>console.warn('[Notifications] order workspace navigation deferred:',err?.message||err))}catch(err){console.warn('[Notifications] order workspace navigation failed:',err)}}
     else if(typeof window.openModal==='function')window.openModal('aoOrdersModal');
     const hostId=isAdmin()?'#aoAdminOrdersLive':canSell()?'#aoSellerOrdersLive':'#aoCustomerOrdersList';
     if(!isAdmin()&&!canSell()&&orderId){
@@ -4962,22 +4975,23 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
   const appId=String(btn.dataset.customerApplicationId||''),readKey=String(btn.dataset.customerNoticeKey||'');
   if(readKey)try{localStorage.setItem(readKey,'1');const row=allApps().find(v=>String(v.id||v.user_id||v.email||'')===appId);if(row){const st=decisionOf(row);localStorage.setItem(`ao_seller_decision_read_v1_${uid()}_${appId}_${decisionStamp(row)}_${st}`,'1')}}catch(_){}
   let a=allApps().find(v=>String(v.id||v.user_id||v.email||'')===appId)||null;
-  // Always resolve the exact clicked application from the database. Never open a
-  // decision modal from an old cached application object.
-  let freshLookupRequired=false,freshLookupSucceeded=false;
-  try{
-   const db=window.ajaySupabase;
-   if(db&&appId){freshLookupRequired=true;const {data,error}=await db.from('ao_seller_applications').select('id,data,updated_at').eq('id',appId).maybeSingle();
-    if(!error&&data?.data){const fresh={...data.data,id:String(data.id||appId),updated_at:data.updated_at||data.data.updated_at||''};
-     const keep=allApps().filter(v=>String(v.id||v.user_id||v.email||'')!==appId);sellers=[...keep,fresh];try{write('sellers',sellers)}catch(_){}a=fresh;freshLookupSucceeded=true;
-    }else if(error)console.warn('[Seller decision] Could not refresh clicked application:',error.message||error);
-   }
-  }catch(err){console.warn('[Seller decision] Fresh application lookup failed:',err)}
-  const dec=a?.decision_notification||{};
-  const resolvedDecision=decisionOf(a);
-  if(a&&['Approved','Rejected','Disapproved'].includes(resolvedDecision)){const stamp=decisionStamp(a),freshReadKey=`ao_customer_seller_decision_read_${uid()}_${appId}_${stamp}_${resolvedDecision}`;try{localStorage.setItem(freshReadKey,'1');localStorage.setItem(`ao_seller_decision_read_v1_${uid()}_${appId}_${stamp}_${resolvedDecision}`,'1')}catch(_){}}
-  const status=(freshLookupRequired&&!freshLookupSucceeded?'pending':resolvedDecision).toLowerCase();
-  sync();m.classList.remove('show');showSellerDecision(a,dec,status);
+  // Open from the already-hydrated account snapshot immediately; refresh the exact
+  // application in the background so a slow network never blocks the notification.
+  const cachedDecision=decisionOf(a),cachedStatus=['Approved','Rejected','Disapproved'].includes(cachedDecision)?cachedDecision.toLowerCase():'pending';
+  const cachedDecisionData=a?.decision_notification||{};
+  sync();m.classList.remove('show');showSellerDecision(a,cachedDecisionData,cachedStatus);
+  const db=window.ajaySupabase;
+  if(db&&appId){
+   Promise.resolve(db.from('ao_seller_applications').select('id,data,updated_at').eq('id',appId).maybeSingle()).then(({data,error})=>{
+    if(error)throw error;
+    if(!data?.data)return;
+    const fresh={...data.data,id:String(data.id||appId),updated_at:data.updated_at||data.data.updated_at||''};
+    const keep=allApps().filter(v=>String(v.id||v.user_id||v.email||'')!==appId);sellers=[...keep,fresh];try{write('sellers',sellers)}catch(_){}
+    const freshDecision=decisionOf(fresh),freshStatus=['Approved','Rejected','Disapproved'].includes(freshDecision)?freshDecision.toLowerCase():'pending';
+    if(['Approved','Rejected','Disapproved'].includes(freshDecision)){const stamp=decisionStamp(fresh),freshReadKey=`ao_customer_seller_decision_read_${uid()}_${appId}_${stamp}_${freshDecision}`;try{localStorage.setItem(freshReadKey,'1');localStorage.setItem(`ao_seller_decision_read_v1_${uid()}_${appId}_${stamp}_${freshDecision}`,'1')}catch(_){}}
+    if($('#aoSellerDecisionResultModal')?.classList.contains('show'))showSellerDecision(fresh,fresh.decision_notification||{},freshStatus);
+   }).catch(err=>console.warn('[Seller decision] Background exact-application refresh deferred:',err?.message||err));
+  }
  }));host.querySelectorAll('[data-customer-order-id]').forEach(btn=>btn.addEventListener('click',()=>{const id=String(btn.dataset.customerOrderId||''),lineId=String(btn.dataset.customerOrderItemId||'');if(!id)return;const d=read();d.unread=(d.unread||[]).filter(raw=>{const k=String(raw);if(k.split('|')[0]!==id)return true;if(!lineId)return false;return !k.startsWith(id+'|item:'+encodeURIComponent(lineId)+'|')});save(d);sync();m.classList.remove('show');const ordersButton=$('#aoMyOrdersButton');if(ordersButton)ordersButton.click();else if(typeof window.openModal==='function')window.openModal('aoOrdersModal');else $('#aoTopOrders')?.click();let tries=0;const focusOrder=()=>{tries++;const modal=$('#aoOrdersModal'),list=$('#aoCustomerOrdersList');if(!list||!modal?.classList.contains('show')){if(tries<12)setTimeout(focusOrder,180);return;}let card=[...list.querySelectorAll('[data-ao-order-card]')].find(c=>String(c.getAttribute('data-ao-order-card'))===id);if(!card&&tries<3){setTimeout(focusOrder,180);return;}if(!card){const delivered=list.querySelector('[data-ao-order-tab=delivered][data-ao-order-scope=customer]');if(delivered){delivered.click();setTimeout(focusOrder,180);return;}}card=[...list.querySelectorAll('[data-ao-order-card]')].find(c=>String(c.getAttribute('data-ao-order-card'))===id);if(card){const target=lineId?[...card.querySelectorAll('[data-ao-order-item-card]')].find(el=>String(el.getAttribute('data-ao-order-item-card'))===lineId):null;if(target){const hiddenSellerPanel=target.closest('[data-ao-seller-panel][hidden]');if(hiddenSellerPanel){const sellerRoot=hiddenSellerPanel.closest('[data-ao-seller-tabs]');sellerRoot?.querySelector(`[data-ao-seller-tab="${hiddenSellerPanel.dataset.aoSellerPanel}"]`)?.click();}}const focus=target||card;focus.classList.remove('ao-notification-target-order');void focus.offsetWidth;focus.classList.add('ao-notification-target-order');focus.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center',inline:'nearest'});focus.setAttribute('tabindex','-1');try{focus.focus({preventScroll:true})}catch(_){try{focus.focus()}catch(__){}}if(focus._aoNotifyHighlightTimer)clearTimeout(focus._aoNotifyHighlightTimer);focus._aoNotifyHighlightTimer=setTimeout(()=>focus.classList.remove('ao-notification-target-order'),3200);}};setTimeout(focusOrder,160);}));}
  function showSellerDecision(app,dec,status){
   let modal=$('#aoSellerDecisionResultModal');if(!modal){modal=document.createElement('div');modal.id='aoSellerDecisionResultModal';modal.className='modal';modal.innerHTML='<div class="modalbox" style="max-width:560px"><div class="drawer-head"><div><span class="eyebrow">AJAY OUTFITS · SELLER APPLICATION</span><h2 id="aoSellerDecisionTitle"></h2></div><button type="button" class="close" aria-label="Close message">×</button></div><p id="aoSellerDecisionMessage" style="line-height:1.7;color:var(--muted)"></p><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px"><button type="button" class="btn" id="aoSellerDecisionAction">Continue</button><button type="button" class="btn secondary" id="aoSellerDecisionClose">Close</button></div></div>';document.body.appendChild(modal);modal.addEventListener('click',e=>{if(e.target===modal){modal.classList.remove('show');delete window.__aoCustomerNotificationFocusOrderId}});modal.querySelector('.close').addEventListener('click',()=>modal.classList.remove('show'));modal.querySelector('#aoSellerDecisionClose').addEventListener('click',()=>modal.classList.remove('show'));}
@@ -4986,6 +5000,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
   if(message)message.textContent=approved?'Congratulations! Your seller application has been approved. You are now an approved Ajay Outfits seller and can start selling. Your seller privileges are active. Use your Seller Dashboard to manage your shop, products, stock and orders.':revoked?'Your seller privileges have been withdrawn following an account review. Your account is now using standard customer access. If you believe this decision was made in error, please contact Ajay Outfits support.':rejected?'Thank you for your interest in selling with Ajay Outfits. After careful review, your application has not been approved at this time. You are welcome to try again on a future occasion.':'We could not refresh the latest application decision just now. Please close this message and try again shortly. No rejection decision is being displayed.';
   if(action){action.textContent=approved?'GO TO SELLER DASHBOARD':'Got it';action.onclick=async()=>{if(!approved){modal.classList.remove('show');return}action.disabled=true;const originalLabel='GO TO SELLER DASHBOARD';action.textContent='Opening dashboard…';try{await window.aoLoadRole?.();if(!window.aoCanSell?.()){await window.hydrateAjayDataFromSupabase?.();await window.aoLoadRole?.()}if(window.aoCanSell?.()){modal.classList.remove('show');if(typeof window.aoOpenSellerDashboardPage==='function')await window.aoOpenSellerDashboardPage();else if(typeof window.renderSellerDashboard==='function'){window.renderSellerDashboard();window.openModal?.('sellerDashboardModal')}else throw new Error('Seller dashboard navigation is unavailable')}else{if(message)message.textContent='Your approval is confirmed, but seller access is still synchronizing. Please try again in a moment. If this continues, contact Ajay Outfits support.';action.textContent=originalLabel;action.disabled=false}}catch(err){console.warn('Could not open seller dashboard after approval:',err);if(message)message.textContent='We could not open your Seller Dashboard just now. Please try again in a moment.';action.textContent=originalLabel;action.disabled=false}}}
   modal.classList.add('show');
+  const decisionBox=modal.querySelector('.modalbox');if(decisionBox){decisionBox.classList.remove('ao-notification-destination-focus');void decisionBox.offsetWidth;decisionBox.classList.add('ao-notification-destination-focus');if(decisionBox._aoDecisionFocusTimer)clearTimeout(decisionBox._aoDecisionFocusTimer);decisionBox._aoDecisionFocusTimer=setTimeout(()=>decisionBox.classList.remove('ao-notification-destination-focus'),2800)}
  }
  window.aoShowSellerDecision=showSellerDecision;
  let customerDecisionChannel=null,customerRealtimeUser='',customerDecisionPollBusy=false,customerDecisionFingerprint='';
@@ -6054,6 +6069,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 
 <style id="ao-staff-order-item-notification-highlight">
 #aoAdminOrdersLive [data-ao-order-item-card].ao-notification-target-order,#aoSellerOrdersLive [data-ao-order-item-card].ao-notification-target-order,#sellerDashOrderList [data-ao-order-item-card].ao-notification-target-order{position:relative;outline:2px solid var(--accent,var(--ink,#17191d))!important;outline-offset:3px;box-shadow:0 0 0 5px color-mix(in srgb,var(--accent,var(--ink,#17191d)) 14%,transparent),0 12px 28px rgba(0,0,0,.09)!important;border-radius:8px;z-index:1}
+</style>
+
+<style id="ao-notification-target-focus-unified-v1">
+/* A quiet, theme-aware focus ring for every exact destination opened from a notification. */
+#adminModal .ao-notification-target-order,#sellerDashboardModal .ao-notification-target-order,#aoStandaloneDashboard .ao-notification-target-order,#aoAdminProductReviewsList .ao-notification-target-order,#aoSellerReviewInbox .ao-notification-target-order,#sellerStatus.ao-notification-target-order{position:relative;outline:2px solid var(--accent,var(--ink,#17191d))!important;outline-offset:3px;border-radius:10px;box-shadow:0 0 0 4px color-mix(in srgb,var(--accent,var(--ink,#17191d)) 13%,transparent)!important;transition:outline-color .18s ease,box-shadow .18s ease,background-color .18s ease}
+#aoAdminProductReviewsList .ao-notification-target-order,#aoSellerReviewInbox .ao-notification-target-order{background:var(--soft)!important}
+#aoSellerDecisionResultModal .modalbox.ao-notification-destination-focus{outline:2px solid var(--accent,var(--ink,#17191d));outline-offset:3px;box-shadow:0 0 0 5px color-mix(in srgb,var(--accent,var(--ink,#17191d)) 14%,transparent),var(--shadow,0 18px 60px rgba(0,0,0,.18))}
+@media(prefers-reduced-motion:reduce){#adminModal .ao-notification-target-order,#sellerDashboardModal .ao-notification-target-order,#aoStandaloneDashboard .ao-notification-target-order,#aoAdminProductReviewsList .ao-notification-target-order,#aoSellerReviewInbox .ao-notification-target-order,#sellerStatus.ao-notification-target-order{transition:none!important}}
 </style>
 
 <style id="ao-multi-seller-order-tabs-v1">
