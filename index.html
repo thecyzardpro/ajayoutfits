@@ -4128,8 +4128,14 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
  const allApps=()=>{try{return typeof sellers!=='undefined'&&Array.isArray(sellers)?sellers:[]}catch(_){return []}};
  const decisionOf=a=>window.aoResolveSellerDecision?.(a)||String(a?.status||'').trim();
  const shopName=()=>{try{return (typeof aoCurrentRoleRow!=='undefined'&&aoCurrentRoleRow?.shop_name)||(typeof profile!=='undefined'&&(profile?.shopName||profile?.name))||''}catch(_){return ''}};
- function resolvedItemOwner(i){let p=null;try{p=typeof productById==='function'?productById(i?.productId||i?.id):null}catch(_){}return {sellerId:String(i?.sellerUserId||p?.sellerUserId||''),sellerName:String(i?.sellerShopName||i?.seller||p?.sellerShopName||p?.seller||'').trim()}}
- function mineOrder(o){if(isAdmin())return true;const user=String(uid()),shop=String(shopName()).trim().toLowerCase();return (Array.isArray(o.items)?o.items:[]).some(i=>{const owner=resolvedItemOwner(i);return (!!owner.sellerId&&owner.sellerId===user)||(!owner.sellerId&&!!shop&&owner.sellerName.toLowerCase()===shop)})}
+ function resolvedItemOwner(i){
+  let p=null;try{p=typeof productById==='function'?productById(i?.productId||i?.id):null}catch(_){}
+  const sellerIds=[i?.sellerUserId,p?.sellerUserId].map(v=>String(v||'').trim()).filter(Boolean);
+  const sellerNames=[i?.sellerShopName,i?.seller,p?.sellerShopName,p?.seller].map(v=>String(v||'').trim()).filter(Boolean);
+  return {sellerIds:[...new Set(sellerIds)],sellerNames:[...new Set(sellerNames.map(v=>v.toLowerCase()))],sellerName:sellerNames[0]||''};
+ }
+ function sellerOwnsNotificationLine(i){const owner=resolvedItemOwner(i),user=String(uid()),shop=String(shopName()).trim().toLowerCase();return !!((user&&owner.sellerIds.includes(user))||(shop&&owner.sellerNames.includes(shop)))}
+ function mineOrder(o){if(isAdmin())return true;return (Array.isArray(o.items)?o.items:[]).some(sellerOwnsNotificationLine)}
  function orderState(o){return [o.status||o.orderStatus||'Order Received',o.paymentStatus||o.payment_status||'Pending'].join('|')}
  const key=()=>`ao_staff_notifications_v3_${uid()}_${isAdmin()?'admin':'seller'}`;
  function read(){try{return JSON.parse(localStorage.getItem(key())||'{"baseline":false,"states":{},"notices":[],"seen":[]}')}catch(_){return {baseline:false,states:{},notices:[],seen:[]}}}
@@ -4173,8 +4179,8 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
    // the person who performed their own update.
    const shop=shopName(),lines=Array.isArray(o.items)?o.items:[];
    lines.forEach((item,index)=>{
-    const owner=resolvedItemOwner(item),sellerId=owner.sellerId,sellerName=owner.sellerName;
-    const ownsLine=isAdmin()||(sellerId&&sellerId===String(uid()))||(!sellerId&&shop&&sellerName.toLowerCase()===String(shop).trim().toLowerCase());
+    const owner=resolvedItemOwner(item),sellerName=owner.sellerName;
+    const ownsLine=isAdmin()||sellerOwnsNotificationLine(item);
     if(!ownsLine)return;
     const identity=String(item?.productId||item?.id||('line-'+index))+'::'+String(item?.sellerUserId||item?.sellerShopName||item?.seller||'')+'::'+index;
     const lineKey='item:'+id+':'+identity;
@@ -4258,7 +4264,15 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
      observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','class','aria-selected','data-ao-tab']});
      if(attempt())return;
     }
-    timeout=setTimeout(()=>{if(finished)return;cleanup();if(afterMissing)afterMissing()},6500);
+    timeout=setTimeout(()=>{
+     if(finished)return;
+     timeout=null;
+     // A final render can create the target only after the first observer window.
+     // Keep observing briefly after that render instead of stopping before it appears.
+     if(afterMissing){try{afterMissing()}catch(err){console.warn('[Notifications] final target render failed:',err)}}
+     if(attempt())return;
+     timeout=setTimeout(()=>{if(finished)return;cleanup();console.warn('[Notifications] notification destination did not appear after the final render')},2500);
+    },6500);
    };
    // Review notices route admins to moderation and sellers to their own review inbox.
    if(target==='product-review'||String(clickedKey).startsWith('review:')||String(clickedKey).startsWith('admin-review:')){
