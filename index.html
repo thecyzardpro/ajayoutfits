@@ -3916,7 +3916,7 @@ body.ao-dashboard-page-mode{overflow:hidden}body.ao-dashboard-page-mode>.wrap,bo
   if(activePage)closePage(true);const page=ensurePage();originalParent=box.parentNode;originalNext=box.nextSibling;movedBox=box;const content=$('#aoStandaloneContent');content.replaceChildren();content.appendChild(box);modal.classList.remove('show');modal.setAttribute('aria-hidden','true');box.classList.add('ao-moved-page-box');activePage=kind;$('#aoStandaloneTitle').textContent=kind==='admin'?'Store management':'Seller dashboard';$('#aoStandaloneSubtitle').textContent=kind==='admin'?'Manage the whole store: catalogue, seller approvals, homepage content and system settings.':'Your listings, stock, assigned customer orders and fulfilment updates.';page.classList.toggle('ao-store-management-page',kind==='admin');page.classList.add('show');document.body.classList.add('ao-dashboard-page-mode');history.pushState({aoPage:kind},'', '#ao-page-'+kind);window.scrollTo({top:0,behavior:'auto'});requestAnimationFrame(()=>{if(activePage!==kind)return;if(kind==='admin'&&typeof updateAdmin==='function')updateAdmin();if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();if(typeof renderSellerDashboard==='function')renderSellerDashboard();});if(typeof hydrateAjayDataFromSupabase==='function'){hydrateAjayDataFromSupabase().then(()=>{if(activePage!==kind)return;if(kind==='admin'&&typeof updateAdmin==='function')updateAdmin();if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();if(typeof renderSellerDashboard==='function')renderSellerDashboard();}).catch(err=>console.warn('Background dashboard refresh failed:',err));}
  }catch(err){console.error('Dashboard could not open:',err);if(typeof toast==='function')toast('Dashboard could not open. Check the browser console for the error.');}}
  window.aoOpenSellerDashboardPage=()=>openPage('seller');
- function openOrdersPage(){if(typeof aoLoadRole==='function')return aoLoadRole().then(async()=>{const staff=(typeof aoIsAdmin==='function'&&aoIsAdmin())||(typeof aoCanSell==='function'&&aoCanSell());if(!staff){if(typeof openModal==='function')openModal('aoOrdersModal');return;}if(activePage)closePage(true);const page=ensurePage();const content=$('#aoStandaloneContent');const orderHostId=(typeof aoIsAdmin==='function'&&aoIsAdmin())?'aoAdminOrdersLive':'aoSellerOrdersLive';content.innerHTML='<section class="ao-orders-workspace"><span class="eyebrow">AJAY OUTFITS · ORDER CENTRE</span><h2 style="margin:8px 0">Customer Orders</h2><p style="color:var(--muted)">Track active orders, update fulfilment and payment status, and access receipts for completed orders. Removing a delivered order only hides it from this browser; it remains in Supabase.</p><div id="'+orderHostId+'" class="admin-list"></div></section>';movedBox=null;originalParent=null;activePage='orders';$('#aoStandaloneTitle').textContent='Customer Orders';$('#aoStandaloneSubtitle').textContent='Active orders, delivered orders and receipts.';page.classList.add('show');document.body.classList.add('ao-dashboard-page-mode');history.pushState({aoPage:'orders'},'', '#ao-page-orders');requestAnimationFrame(()=>{if(activePage==='orders'&&typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();});if(typeof hydrateAjayDataFromSupabase==='function')hydrateAjayDataFromSupabase().then(()=>{if(activePage==='orders'&&typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();}).catch(err=>console.warn('Background orders refresh failed:',err));});}
+ function openOrdersPage(){if(typeof aoLoadRole==='function')return aoLoadRole().then(async()=>{const staff=(typeof aoIsAdmin==='function'&&aoIsAdmin())||(typeof aoCanSell==='function'&&aoCanSell());if(!staff){if(typeof openModal==='function')openModal('aoOrdersModal');return;}if(activePage)closePage(true);const page=ensurePage();const content=$('#aoStandaloneContent');const orderHostId=(typeof aoIsAdmin==='function'&&aoIsAdmin())?'aoAdminOrdersLive':'aoSellerOrdersLive';const adminMode=typeof aoIsAdmin==='function'&&aoIsAdmin(),ordersTitle=adminMode?'Customer Orders':'Seller Orders';content.innerHTML='<section class="ao-orders-workspace"><span class="eyebrow">AJAY OUTFITS · ORDER CENTRE</span><h2 style="margin:8px 0">'+ordersTitle+'</h2><p style="color:var(--muted)">'+(adminMode?'Track customer orders across the store, update fulfilment and payment status, and access receipts for completed orders.':'Review orders containing your products, update the fulfilment steps available to your seller account, and access relevant receipts.')+'</p><div id="'+orderHostId+'" class="admin-list"></div></section>';movedBox=null;originalParent=null;activePage='orders';$('#aoStandaloneTitle').textContent=ordersTitle;$('#aoStandaloneSubtitle').textContent=adminMode?'All customer orders, fulfilment and receipts.':'Your shop orders, fulfilment and receipts.';page.classList.add('show');document.body.classList.add('ao-dashboard-page-mode');history.pushState({aoPage:'orders'},'', '#ao-page-orders');requestAnimationFrame(()=>{if(activePage==='orders'&&typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();});if(typeof hydrateAjayDataFromSupabase==='function')hydrateAjayDataFromSupabase().then(()=>{if(activePage==='orders'&&typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();}).catch(err=>console.warn('Background orders refresh failed:',err));});}
  window.aoOpenCustomerOrdersPage=openOrdersPage;
  document.addEventListener('click',e=>{const admin=e.target.closest('#adminLink'),seller=e.target.closest('#sellerDashboardLink'),cart=e.target.closest('#cartBtn'),topOrders=e.target.closest('#aoTopOrders'),accountOrders=e.target.closest('#aoDashboardOrders');const staff=(typeof aoIsAdmin==='function'&&aoIsAdmin())||(typeof aoCanSell==='function'&&aoCanSell());if((topOrders||accountOrders)&&staff){e.preventDefault();e.stopImmediatePropagation();openOrdersPage();return;}if(admin){e.preventDefault();e.stopImmediatePropagation();openPage('admin');return;}if(seller){e.preventDefault();e.stopImmediatePropagation();openPage('seller');return;}if(cart&&staff){e.preventDefault();e.stopImmediatePropagation();return;}},true);
  document.addEventListener('click',e=>{const sell=e.target.closest('#footerSell,[data-editorial="seller"]');if(!sell)return;e.preventDefault();e.stopImmediatePropagation();(async()=>{await aoLoadRole();if(aoCanSell()){openPage('seller');return;}const m=$('#sellerModal');if(m){$('#sellerStatus').innerHTML='';openModal('sellerModal');}})();},true);
@@ -3927,8 +3927,7 @@ body.ao-dashboard-page-mode{overflow:hidden}body.ao-dashboard-page-mode>.wrap,bo
   const cart=$('#cartBtn'),wish=$('#wishBtn'),topOrders=$('#aoTopOrders');
   const accountOrders=$('#aoDashboardOrders');
 
-  // A single header order shortcut: Admin gets Customer Orders, customers get My Orders.
-  // Non-admin sellers use their Seller Dashboard order workspace, so no extra order icon.
+  // One role-aware order shortcut: Admin gets Customer Orders, approved sellers get Seller Orders, customers get My Orders.
   if(cart){
     cart.hidden=staff;
     cart.setAttribute('aria-hidden',staff?'true':'false');
@@ -3941,16 +3940,16 @@ body.ao-dashboard-page-mode{overflow:hidden}body.ao-dashboard-page-mode>.wrap,bo
   }
   if(wish){wish.hidden=staff;wish.setAttribute('aria-hidden',staff?'true':'false');}
   if(topOrders){
-    const showOrders=admin||!staff;
+    const showOrders=admin||seller||!staff;
     topOrders.hidden=!showOrders;
     topOrders.setAttribute('aria-hidden',showOrders?'false':'true');
-    topOrders.setAttribute('aria-label',admin?'Customer Orders':'My Orders');
-    topOrders.title=admin?'Customer Orders':'My Orders';
+    topOrders.setAttribute('aria-label',admin?'Customer Orders':seller?'Seller Orders':'My Orders');
+    topOrders.title=admin?'Customer Orders':seller?'Seller Orders':'My Orders';
   }
   if(accountOrders){
-    accountOrders.hidden=staff&&!admin;
+    accountOrders.hidden=staff&&!admin&&!seller;
     const b=accountOrders.querySelector('b');
-    if(b)b.textContent=admin?'Customer Orders':'My Orders';
+    if(b)b.textContent=admin?'Customer Orders':seller?'Seller Orders':'My Orders';
     const small=accountOrders.querySelector('small');
     if(small)small.textContent='Orders and receipts';
   }
@@ -3962,9 +3961,9 @@ body.ao-dashboard-page-mode{overflow:hidden}body.ao-dashboard-page-mode>.wrap,bo
     const el=$(sel);if(el)el.hidden=staff;
   });
   const label=$('#aoMyOrdersButton');
-  if(label)label.textContent=admin?'Customer Orders & receipts':'My Orders & receipts';
+  if(label)label.textContent=admin?'Customer Orders & receipts':seller?'Seller Orders & receipts':'My Orders & receipts';
   const customerHeading=$('#aoOrdersModal .drawer-head h2');
-  if(customerHeading)customerHeading.textContent=admin?'Customer Orders':'My Orders';
+  if(customerHeading)customerHeading.textContent=admin?'Customer Orders':seller?'Seller Orders':'My Orders';
  } const prevRoleLinks=window.aoUpdateRoleLinks;window.aoUpdateRoleLinks=function(){if(typeof prevRoleLinks==='function')prevRoleLinks();applyRoleChrome();};
  window.addEventListener('ao:auth-change',event=>{const user=event?.detail?.user||null;window.aoCurrentUser=user;if(typeof aoCurrentUser!=='undefined')aoCurrentUser=user;if(!user)profile=null;try{aoSyncTopAccount()}catch(_){}applyRoleChrome()});window.addEventListener('ao:order-created',()=>{if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();});window.addEventListener('load',()=>setTimeout(async()=>{try{if(window.__aoStorefrontHydrationPromise)await window.__aoStorefrontHydrationPromise;if(typeof aoSellerStatusSnapshot!=='undefined')aoSellerStatusSnapshot=sellers.map(v=>({user_id:v.user_id,status:v.status||'Pending review'}));if(typeof renderCustomerOrders==='function')renderCustomerOrders();if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();if(typeof renderSellerDashboard==='function')renderSellerDashboard();}catch(err){console.warn('Initial store data refresh failed:',err);}},0));document.addEventListener('DOMContentLoaded',applyRoleChrome);setTimeout(applyRoleChrome,500);setTimeout(applyRoleChrome,1600);
  document.addEventListener('change',e=>{if(e.target.id!=='sellerProductImageFile')return;const file=e.target.files?.[0],preview=$('#sellerProductImagePreview');if(!preview)return;if(!file){preview.hidden=true;preview.innerHTML='';return;}if(!/^image\/(png|jpeg|webp|gif)$/.test(file.type)||file.size>2.5*1024*1024){toast('Choose PNG, JPG, WEBP or GIF up to 2.5 MB');e.target.value='';preview.hidden=true;return;}const reader=new FileReader();reader.onload=()=>{preview.hidden=false;preview.innerHTML='<img alt="Selected product preview" style="width:100px;height:110px;object-fit:cover" src="'+String(reader.result).replace(/"/g,'&quot;')+'"><small>Selected image ready to publish</small>';};reader.readAsDataURL(file);});
@@ -4109,6 +4108,7 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
 .ao-notify-item small{display:block;color:var(--muted);margin-top:4px;line-height:1.45}
 .ao-notify-dot{width:9px;height:9px;flex:0 0 9px;border-radius:50%;background:var(--ink);margin-top:5px}
 #sellerDashboardLink .ao-notify-count{margin-left:6px;vertical-align:middle}
+#aoTopOrders .ao-order-shortcut-count{position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;padding:0 4px;border:2px solid var(--bg);font-size:9px;box-shadow:0 2px 7px rgba(0,0,0,.12)}
 @media(max-width:620px){.ao-seller-notify-head{align-items:stretch}.ao-seller-notify-btn{width:100%;justify-content:center}#aoOrdersModal .modalbox{width:100%;max-height:calc(100dvh - 16px)}}
 </style>
 <script id="ao-2026-10-28-seller-notifications">
@@ -4162,7 +4162,7 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
    const actorId=String(o.updatedBy||o.lastUpdatedBy||o.updated_by||'');
    const localOrderActor=window.__aoLocalOrderActors?.get(id);const ownUpdate=(!!actorId&&actorId===String(uid()))||!!(localOrderActor&&localOrderActor.actorId===String(uid())&&now-Number(localOrderActor.at||0)<120000&&orderState(o)!==String(localOrderActor.beforeState||''));
    if(prev===undefined){if(d.baseline&&!ownUpdate){const k='order:'+id+':'+st;seen.delete(k);if(!notices.some(n=>n.key===k)){notices.unshift({key:k,kind:'order',target:'orders',orderId:id,title:isAdmin()?'New customer order':'New order for your shop',detail:`Order ${id} · ${o.status||o.orderStatus||'Order Received'} · Payment ${o.paymentStatus||o.payment_status||'Pending'}`,time:now});changed=true}}states[id]=st;changed=true}
-   else if(prev!==st){if(!ownUpdate){for(let i=notices.length-1;i>=0;i--){const old=notices[i];if(old?.kind==='order'&&String(old.orderId||'')===id&&!old.itemIdentity){notices.splice(i,1);changed=true}}const k='order:'+id+':'+st;seen.delete(k);if(!notices.some(n=>n.key===k)){notices.unshift({key:k,kind:'order',target:'orders',orderId:id,title:'Order updated',detail:`Order ${id} · ${o.status||o.orderStatus||'Order Received'} · Payment ${o.paymentStatus||o.payment_status||'Pending'}`,time:now});changed=true}}states[id]=st;changed=true}
+   else if(prev!==st){if(!ownUpdate){const beforeParts=String(prev).split('|'),afterParts=String(st).split('|'),paymentOnly=beforeParts[1]!==afterParts[1];for(let i=notices.length-1;i>=0;i--){const old=notices[i];if(old?.kind==='order'&&String(old.orderId||'')===id&&!old.itemIdentity){notices.splice(i,1);changed=true}}const k='order:'+id+':'+st;seen.delete(k);if(!notices.some(n=>n.key===k)){notices.unshift({key:k,kind:'order',target:paymentOnly?'payment':'orders',orderId:id,title:paymentOnly?'Payment updated':'Order updated',detail:`Order ${id} · ${o.status||o.orderStatus||'Order Received'} · Payment ${o.paymentStatus||o.payment_status||'Pending'}`,time:now});changed=true}}states[id]=st;changed=true}
    // Track each seller's product line as well as the order total. This catches
    // fulfilment/payment changes made by another staff role, without notifying
    // the person who performed their own update.
@@ -4178,10 +4178,11 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
     const latestFulfilmentHistory=Array.isArray(item?.fulfilmentHistory)?item.fulfilmentHistory[item.fulfilmentHistory.length-1]:null;const latestPaymentHistory=Array.isArray(item?.paymentHistory)?item.paymentHistory[item.paymentHistory.length-1]:null;const lineActorId=String(item?.fulfilmentUpdatedBy||item?.paymentUpdatedBy||item?.updatedBy||latestFulfilmentHistory?.by||latestFulfilmentHistory?.actorId||latestFulfilmentHistory?.userId||latestFulfilmentHistory?.user_id||latestPaymentHistory?.by||latestPaymentHistory?.actorId||latestPaymentHistory?.userId||latestPaymentHistory?.user_id||'');const localLineActor=window.__aoLocalOrderActionActors?.get(id+'|'+identity);const localLineMatches=!!(localLineActor&&localLineActor.actorId===String(uid())&&now-Number(localLineActor.at||0)<120000&&((localLineActor.field==='fulfilment'&&String(item?.fulfilmentStatus||item?.fulfillmentStatus||item?.fulfilment_status||item?.fulfillment_status||'Order Received')===String(localLineActor.value))||(localLineActor.field==='payment'&&String(item?.paymentStatus||item?.payment_status||'Pending')===String(localLineActor.value))));const ownLineUpdate=ownUpdate||(!!lineActorId&&lineActorId===String(uid()))||localLineMatches;if(oldLineState!==undefined&&oldLineState!==lineState&&!ownLineUpdate){
      const fulfilment=String(item?.fulfilmentStatus||item?.fulfillmentStatus||item?.fulfilment_status||item?.fulfillment_status||'Order Received');
      const payment=String(item?.paymentStatus||item?.payment_status||'Pending');
+     let paymentOnly=false;try{const before=JSON.parse(oldLineState),after=JSON.parse(lineState);paymentOnly=before[1]!==after[1]}catch(_){}
      const noticeKey='order-item:'+id+':'+encodeURIComponent(identity)+':'+lineState;seen.delete(noticeKey);
      for(let i=notices.length-1;i>=0;i--){const old=notices[i];if(old?.kind==='order'&&String(old.orderId||'')===id&&String(old.itemIdentity||'')===identity&&old.key!==noticeKey){notices.splice(i,1);changed=true}}
      if(!notices.some(n=>n.key===noticeKey)){
-      notices.unshift({key:noticeKey,kind:'order',target:'orders',orderId:id,itemIdentity:identity,title:'Order item updated',detail:`Order ${id} · ${sellerName||'Seller item'} · ${fulfilment} · Payment ${payment}`,time:now});
+      notices.unshift({key:noticeKey,kind:'order',target:paymentOnly?'payment':'orders',orderId:id,itemIdentity:identity,title:paymentOnly?'Item payment updated':'Order item updated',detail:`Order ${id} · ${sellerName||'Seller item'} · ${fulfilment} · Payment ${payment}`,time:now});
       changed=true;
      }
     }
@@ -4239,7 +4240,7 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
    latest.seen=[...new Set([...(latest.seen||[]),...removed])].slice(-300);latest.notices=(latest.notices||[]).filter(n=>!removed.has(n.key));
    save(latest);updateBadges();modal.classList.remove('show');
    const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-   const focusNode=(node)=>{if(!node)return false;const orderCard=node.matches?.('[data-ao-order-card]')?node:node.closest?.('[data-ao-order-card]');if(orderCard){const detailContent=orderCard.querySelector('[data-ao-detail-content]');const detailToggle=orderCard.querySelector('[data-ao-detail-toggle]');if(detailContent?.hidden&&detailToggle)detailToggle.click();}const hiddenSellerPanel=node.closest('[data-ao-seller-panel][hidden]');if(hiddenSellerPanel){const sellerRoot=hiddenSellerPanel.closest('[data-ao-seller-tabs]');sellerRoot?.querySelector(`[data-ao-seller-tab="${hiddenSellerPanel.dataset.aoSellerPanel}"]`)?.click();}node.scrollIntoView({behavior:reduced?'auto':'smooth',block:'center',inline:'nearest'});node.classList.remove('ao-notification-target-order');void node.offsetWidth;node.classList.add('ao-notification-target-order');node.setAttribute('tabindex','-1');try{node.focus({preventScroll:true})}catch(_){}if(node._aoNotifyHighlightTimer)clearTimeout(node._aoNotifyHighlightTimer);node._aoNotifyHighlightTimer=setTimeout(()=>node.classList.remove('ao-notification-target-order'),3600);return true};
+   const focusNode=(node)=>{if(!node)return false;const orderCard=node.matches?.('[data-ao-order-card]')?node:node.closest?.('[data-ao-order-card]');if(orderCard){const detailContent=orderCard.querySelector('[data-ao-detail-content]');const detailToggle=orderCard.querySelector('[data-ao-detail-toggle]');if(detailContent?.hidden&&detailToggle)detailToggle.click();if(target==='payment'){const tabName=itemIdentity?'products':'payment';orderCard.querySelector(`[data-ao-detail-tab="${tabName}"]`)?.click();}}const hiddenSellerPanel=node.closest('[data-ao-seller-panel][hidden]');if(hiddenSellerPanel){const sellerRoot=hiddenSellerPanel.closest('[data-ao-seller-tabs]');sellerRoot?.querySelector(`[data-ao-seller-tab="${hiddenSellerPanel.dataset.aoSellerPanel}"]`)?.click();}node.scrollIntoView({behavior:reduced?'auto':'smooth',block:'center',inline:'nearest'});node.classList.remove('ao-notification-target-order');void node.offsetWidth;node.classList.add('ao-notification-target-order');node.setAttribute('tabindex','-1');try{node.focus({preventScroll:true})}catch(_){}if(node._aoNotifyHighlightTimer)clearTimeout(node._aoNotifyHighlightTimer);node._aoNotifyHighlightTimer=setTimeout(()=>node.classList.remove('ao-notification-target-order'),3600);return true};
    // Resolve notification targets immediately and observe real DOM changes.
    // No repeated 160ms polling while order/application/review panels render.
    const retryFocus=(finder,afterMissing)=>{
@@ -4336,7 +4337,7 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
       const line=[...card.querySelectorAll('[data-ao-order-item-card]')].find(el=>String(el.getAttribute('data-ao-order-item-card'))===String(itemIdentity));
       return line||card;
      }
-     return card;
+     return target==='payment'?(card.querySelector('[data-ao-detail-panel="payment"]')||card):card;
     };
     retryFocus(findExactTarget,()=>{
      // One final render after the workspace has settled; MutationObserver in
@@ -4360,7 +4361,7 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
     }));
  }
  window.aoOpenStaffNotifications=openNotifications;
- function updateBadges(){if(!canSell()&&!isAdmin())return;const d=collect(),unread=d.notices.filter(n=>!(d.seen||[]).includes(n.key)).length;['aoSellerNotificationCount','aoSellerTopCount'].forEach(id=>{const b=$('#'+id);if(b){b.textContent=unread>99?'99+':String(unread);b.hidden=!unread}});const admin=isAdmin(),link=$(admin?'#adminLink':'#sellerDashboardLink'),wrongLink=$(admin?'#sellerDashboardLink':'#adminLink');if(wrongLink)wrongLink.querySelector('.ao-notify-count')?.remove();if(link){let b=link.querySelector('.ao-notify-count');if(!b){b=document.createElement('span');b.className='ao-notify-count';b.setAttribute('aria-label','Unread notifications');link.appendChild(b)}b.textContent=unread>99?'99+':String(unread);b.hidden=!unread}}
+ function updateBadges(){if(!canSell()&&!isAdmin())return;const d=collect(),unread=d.notices.filter(n=>!(d.seen||[]).includes(n.key)).length;['aoSellerNotificationCount','aoSellerTopCount'].forEach(id=>{const b=$('#'+id);if(b){b.textContent=unread>99?'99+':String(unread);b.hidden=!unread}});/* Notifications belong to the bell only. Orders and dashboard shortcuts stay clean. */document.querySelectorAll('#aoTopOrders .ao-order-shortcut-count,#adminLink .ao-notify-count,#sellerDashboardLink .ao-notify-count').forEach(b=>b.remove())}
  function ensureBell(){if(!canSell()&&!isAdmin())return;const head=$(isAdmin()?'#adminModal .drawer-head':'#sellerDashboardModal .drawer-head');if(head&&!$('#aoStaffNotificationBell')){const b=document.createElement('button');b.type='button';b.className='ao-seller-notify-btn';b.id='aoStaffNotificationBell';b.innerHTML='<svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg><span>Notifications</span><span class="ao-notify-count" id="aoSellerNotificationCount" hidden>0</span>';b.addEventListener('click',openNotifications);head.insertAdjacentElement('afterend',b)}}
  function hook(){try{if(!uid()||uid()==='guest')return;ensureBell();const bellParent=$('.actions');if(bellParent&&(canSell()||isAdmin())&&!$('#aoSellerTopBell')){const b=document.createElement('button');b.type='button';b.id='aoSellerTopBell';b.className='iconbtn ao-seller-top-bell';b.setAttribute('aria-label','Open staff notifications');b.title='Notifications';b.innerHTML='<svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg><span class="ao-notify-count" id="aoSellerTopCount" hidden>0</span>';const account=$('#accountBtn');(account||bellParent.firstChild)?.insertAdjacentElement('beforebegin',b);b.addEventListener('click',openNotifications)}updateBadges();const openModal=$('#aoSellerNotificationsModal');if(openModal?.classList.contains('show'))openNotifications();try{window.dispatchEvent(new CustomEvent('ao:staff-notifications-updated'))}catch(_){}}catch(e){console.warn('Staff notifications could not refresh',e)}}
  document.addEventListener('click',e=>{if(e.target.closest('#sellerDashboardLink,#adminLink'))setTimeout(hook,150)});document.addEventListener('visibilitychange',()=>{if(!document.hidden)hook()});window.addEventListener('focus',hook);
@@ -4559,12 +4560,12 @@ html[data-theme="dark"] #aoSellerTopBell .ao-notify-count,html[data-theme="dark"
  function ensureToast(){let t=$('#aoLiveStaffToast');if(t)return t;t=document.createElement('div');t.id='aoLiveStaffToast';t.className='ao-live-staff-toast';t.hidden=true;t.setAttribute('role','status');t.setAttribute('aria-live','polite');t.innerHTML='<span class="ao-toast-symbol" aria-hidden="true">↗︎</span><span><strong id="aoLiveStaffToastTitle">New order update</strong><small id="aoLiveStaffToastDetail"></small></span><button type="button" id="aoLiveStaffToastClose" aria-label="Dismiss notification">×</button>';document.body.appendChild(t);$('#aoLiveStaffToastClose').addEventListener('click',()=>{t.hidden=true;clearTimeout(toastTimer)});return t}
  function showToast(n){const t=ensureToast();$('#aoLiveStaffToastTitle').textContent=n.title||'New order update';$('#aoLiveStaffToastDetail').textContent=n.detail||'There is new activity in your dashboard.';t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true},5600)}
  function upgradeTray(){const b=$('#aoSellerTopBell');if(b){b.innerHTML='<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg><span class="ao-notify-count" id="aoSellerTopCount" hidden>0</span>';b.setAttribute('aria-label','Open order and seller notifications');b.title='Notifications';}
- // A seller dashboard shortcut carries the same unread total, while the tray remains the primary entry point.
- const link=$('#sellerDashboardLink');if(link&&!link.querySelector('.ao-notify-count')){const badge=document.createElement('span');badge.className='ao-notify-count';badge.setAttribute('aria-label','Unread seller notifications');link.appendChild(badge)}
+ // The bell is the single notification entry point; dashboard and order shortcuts never carry unread badges.
+ document.querySelectorAll('#aoTopOrders .ao-order-shortcut-count,#adminLink .ao-notify-count,#sellerDashboardLink .ao-notify-count').forEach(b=>b.remove());
  }
  function syncAndToast(){if(getUser()==='guest'||(!seller()&&!admin()))return;upgradeTray();const d=read(),notices=Array.isArray(d.notices)?d.notices:[],seen=new Set(d.seen||[]),unread=notices.filter(n=>!seen.has(n.key));const current=new Set(unread.map(n=>n.key));
   if(ready){const fresh=unread.filter(n=>!lastKeys.has(n.key));if(fresh.length){const n=fresh[0];showToast(n)}}lastKeys=current;ready=true;
-  const count=unread.length,display=count>99?'99+':String(count);['aoSellerTopCount','aoSellerNotificationCount'].forEach(id=>{const el=$('#'+id);if(el){el.textContent=display;el.hidden=count===0}});const foot=$('#sellerDashboardLink .ao-notify-count');if(foot){foot.textContent=display;foot.hidden=count===0}
+  const count=unread.length,display=count>99?'99+':String(count);['aoSellerTopCount','aoSellerNotificationCount'].forEach(id=>{const el=$('#'+id);if(el){el.textContent=display;el.hidden=count===0}});
  }
  // Existing Supabase realtime hydrates orders/applications. Polling the already-updated local snapshot
  // keeps the count and toast in sync even when the dashboard DOM is created after login.
@@ -4803,6 +4804,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .modalbox,html[data-theme=
   let d;try{d=JSON.parse(localStorage.getItem(key())||'{"baseline":false,"states":{},"itemStates":{},"unread":[]}')}catch(_){d={baseline:false,states:{},itemStates:{},unread:[]}}
   d.states=d.states&&typeof d.states==='object'?d.states:{};
   d.itemStates=d.itemStates&&typeof d.itemStates==='object'?d.itemStates:{};
+  d.noticeTypes=d.noticeTypes&&typeof d.noticeTypes==='object'?d.noticeTypes:{};
   d.unread=Array.isArray(d.unread)?d.unread:[];
   if(roleStaff()){
    if(!d.suspendedForStaff){d.suspendedForStaff=true;try{localStorage.setItem(key(),JSON.stringify(d))}catch(_){}}
@@ -4821,7 +4823,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .modalbox,html[data-theme=
     const lines=Array.isArray(o.items)?o.items:[],previousLines=d.itemStates[id]&&typeof d.itemStates[id]==='object'?d.itemStates[id]:{},nextLines={};
     if(prev===undefined){
      const noticeKey=id+'|'+st;
-     const actorId=String(o.updatedBy||o.updated_by||o.createdBy||o.created_by||o.statusHistory?.[0]?.by||'');const ownAction=!!actorId&&actorId===String(uid());if(!ownAction&&!viewedOrders.has(id)&&!d.unread.includes(noticeKey))d.unread.push(noticeKey);
+     const actorId=String(o.updatedBy||o.updated_by||o.createdBy||o.created_by||o.statusHistory?.[0]?.by||'');const ownAction=!!actorId&&actorId===String(uid());if(!ownAction&&!viewedOrders.has(id)&&!d.unread.includes(noticeKey)){d.unread.push(noticeKey);d.noticeTypes[noticeKey]='orders';}
      d.states[id]=st;
      lines.forEach((item,index)=>nextLines[itemIdentity(item,index)]=itemState(item));
      d.itemStates[id]=nextLines;changed=true;continue;
@@ -4831,12 +4833,13 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .modalbox,html[data-theme=
      if(old!==undefined&&old!==next&&!viewedOrders.has(id)){
       const marker=id+'|item:'+encodeURIComponent(identity)+'|';
       d.unread=d.unread.filter(raw=>!String(raw).startsWith(marker));
-      const noticeKey=marker+next;
+      const noticeKey=marker+next;let paymentOnly=false;try{const before=JSON.parse(old),after=JSON.parse(next);paymentOnly=before[1]!==after[1]}catch(_){}
       if(!d.unread.includes(noticeKey))d.unread.push(noticeKey);
+      d.noticeTypes[noticeKey]=paymentOnly?'payment':'orders';
      }
      nextLines[identity]=next;
     });
-    if(prev!==st){const noticeKey=id+'|'+st;if(!viewedOrders.has(id)&&!d.unread.includes(noticeKey))d.unread.push(noticeKey);d.states[id]=st;changed=true;}
+    if(prev!==st){const noticeKey=id+'|'+st;let paymentOnly=false;try{const before=JSON.parse(prev),after=JSON.parse(st);paymentOnly=before[1]!==after[1]}catch(_){}if(!viewedOrders.has(id)&&!d.unread.includes(noticeKey)){d.unread.push(noticeKey);d.noticeTypes[noticeKey]=paymentOnly?'payment':'orders';}d.states[id]=st;changed=true;}
     if(JSON.stringify(previousLines)!==JSON.stringify(nextLines)){d.itemStates[id]=nextLines;changed=true;}
    }
   }
@@ -4853,9 +4856,10 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .modalbox,html[data-theme=
     if(!item){const parts=identity.split('::'),productId=String(parts[0]||''),owner=String(parts[1]||''),oldIndex=Number(parts[2]);if(Number.isInteger(oldIndex)&&oldIndex>=0&&String(lines[oldIndex]?.productId||lines[oldIndex]?.id||'')===productId){itemIndex=oldIndex;item=lines[itemIndex]}if(!item){itemIndex=lines.findIndex(line=>String(line?.productId||line?.id||'')===productId&&(!owner||String(line?.sellerUserId||line?.sellerShopName||line?.seller||'')===owner));if(itemIndex<0)itemIndex=lines.findIndex(line=>String(line?.productId||line?.id||'')===productId);if(itemIndex>=0)item=lines[itemIndex];}}
     if(!item){const fallbackKey=id+'|'+stateOf(o);if(!cleaned.includes(fallbackKey))cleaned.push(fallbackKey);continue;}
     const currentIdentity=itemIdentity(item,itemIndex),currentState=itemState(item),currentKey=id+'|item:'+encodeURIComponent(currentIdentity)+'|'+currentState;
-    if(!cleaned.includes(currentKey))cleaned.push(currentKey);
+    if(!cleaned.includes(currentKey)){cleaned.push(currentKey);if(d.noticeTypes[k]&&!d.noticeTypes[currentKey])d.noticeTypes[currentKey]=d.noticeTypes[k];}
    }else if(stateOf(o)===tail&&!cleaned.includes(k))cleaned.push(k);
   }
+  const keepTypes={};cleaned.forEach(k=>{if(d.noticeTypes[k])keepTypes[k]=d.noticeTypes[k]});d.noticeTypes=keepTypes;
   if(cleaned.length!==d.unread.length||cleaned.some((v,i)=>v!==d.unread[i]))changed=true;
   d.unread=cleaned.slice(-300);
   if(changed){try{localStorage.setItem(key(),JSON.stringify(d))}catch(_){}try{window.dispatchEvent(new CustomEvent('ao:customer-notifications-updated'))}catch(_){}}
@@ -5002,9 +5006,9 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
     if(!item){const parts=identity.split('::'),productId=String(parts[0]||''),owner=String(parts[1]||''),oldIndex=Number(parts[2]);if(Number.isInteger(oldIndex)&&oldIndex>=0&&String(lines[oldIndex]?.productId||lines[oldIndex]?.id||'')===productId){itemIndex=oldIndex;item=lines[itemIndex]}if(!item){itemIndex=lines.findIndex(line=>String(line?.productId||line?.id||'')===productId&&(!owner||String(line?.sellerUserId||line?.sellerShopName||line?.seller||'')===owner));if(itemIndex<0)itemIndex=lines.findIndex(line=>String(line?.productId||line?.id||'')===productId);if(itemIndex>=0)item=lines[itemIndex];}}
     if(!item){const fallbackKey=id+'|'+JSON.stringify([status(o),pay(o)]);latestOrders.set(id,{id,key:fallbackKey,kind:'order',order:o,title:'Seller order update',detail:`Order ${id} · A seller item update is available`});continue;}
     const currentIdentity=lineIdentity(item,itemIndex),currentState=lineState(item),currentKey=id+'|item:'+encodeURIComponent(currentIdentity)+'|'+currentState;
-    latestLines.set(id+'|'+currentIdentity,{id,key:currentKey,kind:'order-item',order:o,item,productId:currentIdentity,title:`${String(item.sellerShopName||item.seller||'Seller')} updated ${String(item.name||item.title||'your item')}`,detail:`Order ${id} · ${String(item.fulfilmentStatus||item.fulfillmentStatus||item.fulfilment_status||item.fulfillment_status||'Order Received')} · Payment ${String(item.paymentStatus||item.payment_status||'Pending')}`});
+    latestLines.set(id+'|'+currentIdentity,{id,key:currentKey,kind:'order-item',changeType:d.noticeTypes?.[currentKey]||'orders',order:o,item,productId:currentIdentity,title:`${String(item.sellerShopName||item.seller||'Seller')} updated ${String(item.name||item.title||'your item')}`,detail:`Order ${id} · ${String(item.fulfilmentStatus||item.fulfillmentStatus||item.fulfilment_status||item.fulfillment_status||'Order Received')} · Payment ${String(item.paymentStatus||item.payment_status||'Pending')}`});
    }else{
-    const expected=id+'|'+JSON.stringify([status(o),pay(o)]);latestOrders.set(id,{id,key:expected,kind:'order',order:o,title:'Your order update',detail:`Order ${id} · ${status(o)} · Payment ${pay(o)}`});
+    const expected=id+'|'+JSON.stringify([status(o),pay(o)]);latestOrders.set(id,{id,key:expected,kind:'order',changeType:d.noticeTypes?.[expected]||'orders',order:o,title:'Your order update',detail:`Order ${id} · ${status(o)} · Payment ${pay(o)}`});
    }
   }
   const clean=[...latestOrders.values(),...latestLines.values()].map(n=>n.key);
@@ -5026,7 +5030,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
  }
  let customerListSignature='';
  function sync(){if(admin()||!signed()){document.querySelector('#aoCustomerTopBell')?.remove();document.querySelector('#aoCustomerNotificationsModal')?.remove();if(!signed()){customerListSignature='';const channel=customerDecisionChannel;customerDecisionChannel=null;customerRealtimeUser='';if(channel&&window.ajaySupabase?.removeChannel)window.ajaySupabase.removeChannel(channel).catch(()=>{});}return;}bell();connectDecisionRealtime();const allItems=items(),list=seller()?allItems.filter(n=>n.kind==='application'):allItems,count=list.length;const b=$('#aoCustomerTopCount');if(b){const display=count>99?'99+':String(count);if(b.textContent!==display)b.textContent=display;b.hidden=!count}const m=$('#aoCustomerNotificationsModal');if(m?.classList.contains('show'))renderList(m,list)}
- function renderList(m,list){const host=m.querySelector('#aoCustomerNotificationList');if(!host)return;const signature=JSON.stringify(list.map(n=>[n.kind,n.id,n.key,n.title,n.detail]));if(signature===customerListSignature&&host.dataset.renderSignature===signature)return;customerListSignature=signature;host.dataset.renderSignature=signature;host.innerHTML=list.length?list.map(n=>n.kind==='application'?`<button type="button" class="ao-notify-item" data-customer-notice-kind="application" data-customer-application-id="${esc(n.id)}" data-customer-notice-key="${esc(n.key)}"><span class="ao-notify-dot" aria-hidden="true"></span><span><b>${esc(n.title)}</b><small>${esc(n.detail)}</small></span></button>`:`<button type="button" class="ao-notify-item" data-customer-order-id="${esc(n.id)}" data-customer-order-delivered="${['delivered','completed'].includes(norm(status(n.order)))?'1':'0'}"${n.kind==='order-item'?` data-customer-order-item-id="${esc(n.productId)}"`:''}><span class="ao-notify-dot" aria-hidden="true"></span><span><b>${esc(n.title)}</b><small>${esc(n.detail)}</small></span></button>`).join(''):'<div class="ao-notifications-empty">You are all caught up. New updates will appear here automatically.</div>';const mark=m.querySelector('#aoCustomerMarkAllRead');if(mark){mark.hidden=!list.length;mark.onclick=()=>{const d=read();d.unread=[];save(d);const u=current(),email=norm(u?.email||(typeof profile!=='undefined'?profile?.email:''));allApps().filter(a=>String(a.user_id||'')===String(u?.id||'')||!!(a.email&&email&&norm(a.email)===email)).forEach(a=>{const dec=a.decision_notification;if(dec){const appId=String(a.id||a.user_id||a.email||''),stamp=decisionStamp(a),decisionStatus=decisionOf(a);try{localStorage.setItem(`ao_customer_seller_decision_read_${uid()}_${appId}_${stamp}_${decisionStatus}`,'1');localStorage.setItem(`ao_seller_decision_read_v1_${uid()}_${appId}_${stamp}_${decisionStatus}`,'1')}catch(_){}}});sync()}}host.querySelectorAll('[data-customer-notice-kind="application"]').forEach(btn=>btn.addEventListener('click',async()=>{
+ function renderList(m,list){const host=m.querySelector('#aoCustomerNotificationList');if(!host)return;const signature=JSON.stringify(list.map(n=>[n.kind,n.id,n.key,n.title,n.detail]));if(signature===customerListSignature&&host.dataset.renderSignature===signature)return;customerListSignature=signature;host.dataset.renderSignature=signature;host.innerHTML=list.length?list.map(n=>n.kind==='application'?`<button type="button" class="ao-notify-item" data-customer-notice-kind="application" data-customer-application-id="${esc(n.id)}" data-customer-notice-key="${esc(n.key)}"><span class="ao-notify-dot" aria-hidden="true"></span><span><b>${esc(n.title)}</b><small>${esc(n.detail)}</small></span></button>`:`<button type="button" class="ao-notify-item" data-customer-order-id="${esc(n.id)}" data-customer-order-delivered="${['delivered','completed'].includes(norm(status(n.order)))?'1':'0'}"${n.kind==='order-item'?` data-customer-order-item-id="${esc(n.productId)}"`:''} data-customer-order-target="${esc(n.changeType||'orders')}"><span class="ao-notify-dot" aria-hidden="true"></span><span><b>${esc(n.title)}</b><small>${esc(n.detail)}</small></span></button>`).join(''):'<div class="ao-notifications-empty">You are all caught up. New updates will appear here automatically.</div>';const mark=m.querySelector('#aoCustomerMarkAllRead');if(mark){mark.hidden=!list.length;mark.onclick=()=>{const d=read();d.unread=[];save(d);const u=current(),email=norm(u?.email||(typeof profile!=='undefined'?profile?.email:''));allApps().filter(a=>String(a.user_id||'')===String(u?.id||'')||!!(a.email&&email&&norm(a.email)===email)).forEach(a=>{const dec=a.decision_notification;if(dec){const appId=String(a.id||a.user_id||a.email||''),stamp=decisionStamp(a),decisionStatus=decisionOf(a);try{localStorage.setItem(`ao_customer_seller_decision_read_${uid()}_${appId}_${stamp}_${decisionStatus}`,'1');localStorage.setItem(`ao_seller_decision_read_v1_${uid()}_${appId}_${stamp}_${decisionStatus}`,'1')}catch(_){}}});sync()}}host.querySelectorAll('[data-customer-notice-kind="application"]').forEach(btn=>btn.addEventListener('click',async()=>{
   const appId=String(btn.dataset.customerApplicationId||''),readKey=String(btn.dataset.customerNoticeKey||'');
   if(readKey)try{localStorage.setItem(readKey,'1');const row=allApps().find(v=>String(v.id||v.user_id||v.email||'')===appId);if(row){const st=decisionOf(row);localStorage.setItem(`ao_seller_decision_read_v1_${uid()}_${appId}_${decisionStamp(row)}_${st}`,'1')}}catch(_){}
   let a=allApps().find(v=>String(v.id||v.user_id||v.email||'')===appId)||null;
@@ -5297,7 +5301,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
   const btn=e.target?.closest?.('#aoCustomerNotificationList [data-customer-order-id]');
   if(!btn)return;
   e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
-  const id=String(btn.getAttribute('data-customer-order-id')||''),lineId=String(btn.getAttribute('data-customer-order-item-id')||''),deliveredTarget=btn.getAttribute('data-customer-order-delivered')==='1';if(!id)return;if(deliveredTarget)window.__aoCustomerNotificationFocusOrderId=id;else delete window.__aoCustomerNotificationFocusOrderId;
+  const id=String(btn.getAttribute('data-customer-order-id')||''),lineId=String(btn.getAttribute('data-customer-order-item-id')||''),paymentTarget=btn.getAttribute('data-customer-order-target')==='payment',deliveredTarget=btn.getAttribute('data-customer-order-delivered')==='1';if(!id)return;if(deliveredTarget)window.__aoCustomerNotificationFocusOrderId=id;else delete window.__aoCustomerNotificationFocusOrderId;
   try{
    const storeKey=`ao_customer_order_notices_v3_${(window.aoCurrentUser?.id||window.aoCurrentUser?.email||'guest')}`;
    const d=JSON.parse(localStorage.getItem(storeKey)||'{"baseline":false,"states":{},"unread":[]}');
@@ -5343,8 +5347,10 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
     }
     finish();
     const target=lineId?[...card.querySelectorAll('[data-ao-order-item-card]')].find(el=>String(el.getAttribute('data-ao-order-item-card'))===lineId):null;
+    const detailContent=card.querySelector('[data-ao-detail-content]'),detailToggle=card.querySelector('[data-ao-detail-toggle]');if(detailContent?.hidden&&detailToggle)detailToggle.click();
+    if(paymentTarget){const tabName=lineId?'products':'payment';card.querySelector(`[data-ao-detail-tab="${tabName}"]`)?.click();}
     if(target){const hiddenSellerPanel=target.closest('[data-ao-seller-panel][hidden]');if(hiddenSellerPanel){const sellerRoot=hiddenSellerPanel.closest('[data-ao-seller-tabs]');sellerRoot?.querySelector(`[data-ao-seller-tab="${hiddenSellerPanel.dataset.aoSellerPanel}"]`)?.click();}}
-    const focus=target||card;
+    const focus=target||(paymentTarget?(card.querySelector('[data-ao-detail-panel="payment"]')||card):card);
     focus.scrollIntoView({behavior:reduced?'auto':'smooth',block:'center',inline:'nearest'});
     focus.classList.remove('ao-notification-target-order');void focus.offsetWidth;focus.classList.add('ao-notification-target-order');
     focus.setAttribute('tabindex','-1');
@@ -6456,6 +6462,26 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 })();
 </script>
 
+<style id="ao-payment-notification-target-focus-v1">
+/* Payment notices land on the Payment panel itself and receive the same quiet theme-aware focus ring. */
+#aoOrdersModal [data-ao-detail-panel="payment"].ao-notification-target-order,
+#adminModal [data-ao-detail-panel="payment"].ao-notification-target-order,
+#sellerDashboardModal [data-ao-detail-panel="payment"].ao-notification-target-order,
+#aoStandaloneDashboard [data-ao-detail-panel="payment"].ao-notification-target-order {
+  position:relative;
+  outline:2px solid var(--accent,var(--ink,#17191d))!important;
+  outline-offset:3px;
+  border-radius:10px;
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--accent,var(--ink,#17191d)) 13%,transparent)!important;
+  scroll-margin-block:96px 24px;
+}
+@media(prefers-reduced-motion:reduce){
+  #aoOrdersModal [data-ao-detail-panel="payment"].ao-notification-target-order,
+  #adminModal [data-ao-detail-panel="payment"].ao-notification-target-order,
+  #sellerDashboardModal [data-ao-detail-panel="payment"].ao-notification-target-order,
+  #aoStandaloneDashboard [data-ao-detail-panel="payment"].ao-notification-target-order{transition:none!important}
+}
+</style>
 </body>
 <!-- AjayOutfits VERSION 95: admin can permanently delete approved or rejected reviews; existing theme tokens and typography retained. -->
 </html>
