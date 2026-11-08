@@ -6410,6 +6410,52 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
  #aoStandaloneDashboard [data-ao-order-card].ao-notification-target-order{scroll-behavior:auto!important}
 }
 </style>
+
+<script id="ao-newsletter-product-deep-link-v1">
+/* Newsletter product deep links: https://ajayoutfits.vercel.app/?product=PRODUCT_ID
+   Opens the existing native product detail modal; no duplicate product UI or altered catalogue logic. */
+(function aoInstallNewsletterProductDeepLink(){
+  'use strict';
+  const params = new URLSearchParams(window.location.search);
+  const requestedId = (params.get('product') || '').trim();
+  if (!requestedId || requestedId.length > 180) return;
+  let opened = false;
+  let attempts = 0;
+  const tryOpen = () => {
+    if (opened) return true;
+    attempts++;
+    try {
+      const lookup = typeof window.productById === 'function'
+        ? window.productById
+        : (id => Array.isArray(window.products) ? window.products.find(p => String(p?.id) === String(id)) : null);
+      const product = lookup(requestedId);
+      if (!product || typeof window.openProduct !== 'function') return false;
+      window.openProduct(product.id);
+      opened = true;
+      document.documentElement.dataset.aoNewsletterProductOpened = 'true';
+      return true;
+    } catch (error) {
+      console.warn('[Ajay Outfits] Newsletter product link could not open:', error?.message || error);
+      return false;
+    }
+  };
+  const start = () => {
+    if (tryOpen()) return;
+    // Catalogue data is hydrated asynchronously from Supabase; retry only around known lifecycle events.
+    const onHydrated = () => {
+      tryOpen();
+      document.removeEventListener('ao:storefront-hydrated', onHydrated);
+    };
+    document.addEventListener('ao:storefront-hydrated', onHydrated);
+    // Local cached catalogue may become available immediately after DOM ready.
+    const retry = () => { if (!tryOpen() && attempts < 3) setTimeout(retry, 350); };
+    setTimeout(retry, 150);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+  else start();
+})();
+</script>
+
 </body>
 <!-- AjayOutfits VERSION 95: admin can permanently delete approved or rejected reviews; existing theme tokens and typography retained. -->
 </html>
