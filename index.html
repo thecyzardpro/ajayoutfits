@@ -1,6 +1,11 @@
 <!doctype html>
 <html lang="en" class="ao-cloud-hydrating">
 <head>
+<link rel="preconnect" href="https://dffhwmlojjosgspzwtzj.supabase.co" crossorigin>
+<link rel="dns-prefetch" href="//dffhwmlojjosgspzwtzj.supabase.co">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
+<link rel="preconnect" href="https://images.unsplash.com" crossorigin>
 <style id="ao-cloud-image-hydration-guard">
 /* Keep default/seed photos from flashing before the saved Admin catalogue and homepage image settings hydrate. */
 /* Product photos use the local last-known catalogue immediately; only cloud-managed homepage art waits for its saved setting. */
@@ -5959,8 +5964,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   };
   scan(document);
   if('MutationObserver'in window){
+    let pendingNodes=new Set(),scanQueued=false;
     const observer=new MutationObserver(records=>{
-      for(const record of records)for(const node of record.addedNodes)if(node.nodeType===1)scan(node);
+      for(const record of records)for(const node of record.addedNodes)if(node.nodeType===1)pendingNodes.add(node);
+      if(scanQueued||!pendingNodes.size)return;
+      scanQueued=true;
+      const flush=()=>{scanQueued=false;const batch=[...pendingNodes];pendingNodes.clear();for(const node of batch)scan(node)};
+      if('requestAnimationFrame'in window)requestAnimationFrame(flush);else Promise.resolve().then(flush);
     });
     observer.observe(document.documentElement,{childList:true,subtree:true});
   }
@@ -6014,14 +6024,25 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   const start=()=>scan(document);
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
   if('MutationObserver'in window){
+    let pendingNodes=new Set(),pendingImages=new Set(),scanQueued=false;
     const observer=new MutationObserver(records=>{
       for(const record of records){
         if(record.type==='childList'){
-          for(const node of record.addedNodes)if(node.nodeType===1)scan(node);
+          for(const node of record.addedNodes)if(node.nodeType===1)pendingNodes.add(node);
         }else if(record.type==='attributes'&&record.target instanceof HTMLImageElement){
-          setPriority(record.target);
+          pendingImages.add(record.target);
         }
       }
+      if(scanQueued||(!pendingNodes.size&&!pendingImages.size))return;
+      scanQueued=true;
+      const flush=()=>{
+        scanQueued=false;
+        const nodes=[...pendingNodes],images=[...pendingImages];
+        pendingNodes.clear();pendingImages.clear();
+        for(const node of nodes)scan(node);
+        for(const img of images)setPriority(img);
+      };
+      if('requestAnimationFrame'in window)requestAnimationFrame(flush);else Promise.resolve().then(flush);
     });
     observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['src']});
   }
