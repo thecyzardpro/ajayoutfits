@@ -6709,6 +6709,66 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   #aoStandaloneDashboard [data-ao-detail-panel="payment"].ao-notification-target-order{transition:none!important}
 }
 </style>
+
+
+<style id="ao-v136-professional-smoothness-pass">
+/* Conservative presentation-only refinement. Existing components, handlers and data flow remain untouched. */
+:root{
+  --ao-motion-fast:150ms;
+  --ao-motion-standard:210ms;
+  --ao-ease:cubic-bezier(.2,.65,.3,1);
+  --ao-focus:var(--accent,#737982);
+}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
+  overscroll-behavior-y:contain;
+}
+button,a,[role="button"],input,select,textarea{
+  -webkit-tap-highlight-color:transparent;
+}
+button,a,[role="button"]{
+  touch-action:manipulation;
+}
+button:active,[role="button"]:active{
+  transform:translateY(0) scale(.985);
+}
+:where(a,button,input,select,textarea,[tabindex]):focus-visible{
+  outline:2px solid var(--ao-focus);
+  outline-offset:3px;
+}
+:where(input,select,textarea){
+  transition:border-color var(--ao-motion-fast) var(--ao-ease),
+             box-shadow var(--ao-motion-fast) var(--ao-ease),
+             background-color var(--ao-motion-fast) var(--ao-ease);
+}
+:where(input,select,textarea):focus-visible{
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--ao-focus) 15%,transparent);
+}
+::placeholder{color:var(--muted);opacity:.78}
+img,svg,video,canvas{max-width:100%}
+img{height:auto}
+[id]{scroll-margin-top:88px}
+@media(hover:hover) and (pointer:fine){
+  a:not(.btn):not(.iconbtn){transition:color var(--ao-motion-fast) var(--ao-ease)}
+}
+@media(max-width:620px){
+  body{overflow-x:hidden}
+  input,select,textarea{max-width:100%}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto!important}
+  *,*::before,*::after{
+    scroll-behavior:auto!important;
+    animation-duration:.01ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:.01ms!important;
+  }
+}
+</style>
+
 </body>
 <!-- AjayOutfits VERSION 95: admin can permanently delete approved or rejected reviews; existing theme tokens and typography retained. -->
 </html>
@@ -7039,3 +7099,34 @@ html[data-theme="dark"] .ao-seller-review-card{background:var(--panel);color:var
  window.hydrateAjayDataFromSupabase=wrapped;
 })();
 </script>
+
+<style id="ao-v135-iphone-filter-type-refinement">
+/* Refine only the storefront filter controls: smaller type and quieter proportions on phones. */
+#filters>.chip,
+#filters>select.chip{
+  font-family:inherit!important;
+  font-size:9px!important;
+  font-weight:600!important;
+  letter-spacing:.025em!important;
+  line-height:1.15!important;
+}
+#filters>select.chip{font-size:9px!important;font-weight:550!important;}
+#filters .ao-currency-label{font-size:9px!important;font-weight:550!important;letter-spacing:.015em!important;}
+#filters #aoCurrencySelect{font-size:9px!important;font-weight:600!important;}
+#filters .ao-currency-rate{font-size:8px!important;letter-spacing:0!important;}
+@media(max-width:620px){
+  #filters{gap:6px!important;row-gap:7px!important;}
+  #filters>.chip{min-height:29px!important;padding:5px 8px!important;font-size:8px!important;letter-spacing:.015em!important;}
+  #filters>select.chip{min-height:29px!important;padding:5px 23px 5px 8px!important;font-size:8px!important;}
+  #filters .ao-currency-switch{min-height:29px!important;padding:3px 8px!important;gap:5px!important;}
+  #filters .ao-currency-label{font-size:8px!important;}
+  #filters #aoCurrencySelect{font-size:8px!important;min-width:59px!important;padding:2px 12px 2px 1px!important;}
+  #filters .ao-currency-rate{font-size:7.5px!important;max-width:116px!important;line-height:1.2!important;}
+  #filters #resetFilters{font-size:8px!important;padding-inline:6px!important;}
+}
+@media(max-width:390px){
+  #filters{gap:5px!important;row-gap:6px!important;}
+  #filters>.chip,#filters>select.chip{font-size:7.5px!important;padding-inline:7px!important;}
+  #filters .ao-currency-rate{max-width:100px!important;font-size:7px!important;}
+}
+</style>
