@@ -2871,31 +2871,18 @@ $('#newsletterForm').addEventListener('submit',async e=>{
  const setMessage=(text,state)=>{message.textContent=text;message.dataset.state=state||'';};
  if(!email||!input.checkValidity()){input.reportValidity();return;}
  const db=window.ajaySupabase;
- if(!db||typeof db.functions?.invoke!=='function'||!db.auth?.getUser){
+ if(!db||typeof db.functions?.invoke!=='function'){
    setMessage('Newsletter sign-up is temporarily unavailable. Please try again later.','error');
    return;
  }
- button.disabled=true;button.setAttribute('aria-busy','true');setMessage('Checking your account…','loading');
+ button.disabled=true;button.setAttribute('aria-busy','true');setMessage('Joining the newsletter…','loading');
  try{
-   const {data:userData,error:userError}=await db.auth.getUser();
-   const user=userData?.user;
-   if(userError||!user?.id||!user?.email){
-     setMessage('Please sign in to your Ajay Outfits account before joining the newsletter.','error');
-     return;
-   }
-   if(String(user.email).trim().toLowerCase()!==email){
-     setMessage('This email does not match your signed-in account. Enter your account email to continue.','error');
-     return;
-   }
-   setMessage('Joining the newsletter…','loading');
    const {data,error}=await db.functions.invoke('ajay-newsletter-subscribe',{body:{email}});
    if(error){
      let detail='';
      try{detail=String(error.context?.body?.error||error.message||'')}catch(_){detail=String(error.message||'')}
      if(/already subscribed|already on the list/i.test(detail)){
        form.reset();setMessage('You’re already on the list. Thanks for being with Ajay Outfits!','success');
-     }else if(/sign in|session|account email|match your account/i.test(detail)){
-       setMessage(detail||'Please sign in with the same email address you entered.','error');
      }else if(/not configured|BREVO_NEWSLETTER_LIST_ID|BREVO_NEWSLETTER_API_KEY/i.test(detail)){
        setMessage('Newsletter email service is not fully configured yet. Please try again later.','error');
      }else{
@@ -2906,10 +2893,9 @@ $('#newsletterForm').addEventListener('submit',async e=>{
    }
    if(data?.alreadySubscribed){form.reset();setMessage('You’re already on the list. Thanks for being with Ajay Outfits!','success');return;}
    if(!data?.success)throw new Error('Newsletter service did not confirm the subscription.');
-   // The subscribe endpoint no longer sends welcome emails. Only a newly-created Brevo contact is eligible here.
    if(data?.sendWelcome===true){
      try{
-       const welcome=await db.functions.invoke('ajay-newsletter-welcome',{body:{email}});
+       const welcome=await db.functions.invoke('ajay-newsletter-welcome',{body:{email,welcomeToken:data?.welcomeToken}});
        if(welcome.error||!welcome.data?.success)console.warn('[Newsletter] Welcome email was not confirmed:',welcome.error?.message||welcome.data?.error||'Unknown error');
      }catch(welcomeError){console.warn('[Newsletter] Welcome email request failed:',welcomeError?.message||welcomeError);}
    }
