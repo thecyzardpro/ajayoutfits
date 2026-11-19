@@ -6799,11 +6799,13 @@ img{height:auto}
 #styleJournal .editorial-card > :not(.ao-section-image){position:relative;z-index:2}
 @media(prefers-reduced-motion:reduce){#styleJournal .editorial-card > .ao-section-image{transition:none!important}}
 </style>
-<style id="ao-role-chrome-stability-v1009">
-/* Keep role-owned navigation stable while the authenticated role is being resolved. */
+<style id="ao-role-chrome-stability-v1010">
+/* Reveal the complete header action group as one unit after the account role is resolved. */
+html:not(.ao-role-chrome-ready) .header .actions,html.ao-role-chrome-transition .header .actions{visibility:hidden!important;opacity:0!important}
+html.ao-role-chrome-ready .header .actions{visibility:visible;opacity:1;transition:opacity .16s ease}
 html.ao-role-chrome-transition #adminLink,html.ao-role-chrome-transition #sellerDashboardLink{visibility:hidden!important;opacity:0!important}
-#adminLink,#sellerDashboardLink{transition:opacity .18s ease, color .18s ease}
-@media(prefers-reduced-motion:reduce){#adminLink,#sellerDashboardLink{transition:none!important}}
+#adminLink,#sellerDashboardLink{transition:opacity .16s ease,color .16s ease}
+@media(prefers-reduced-motion:reduce){html.ao-role-chrome-ready .header .actions,#adminLink,#sellerDashboardLink{transition:none!important}}
 </style>
 </body>
 <!-- AjayOutfits VERSION 95: admin can permanently delete approved or rejected reviews; existing theme tokens and typography retained. -->
