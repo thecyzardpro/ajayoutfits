@@ -1770,6 +1770,7 @@ a.ao-account-shortcut:hover{border-color:var(--line);background:var(--panel)}
 #aoFooterAppDownload .ao-app-download-link:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}
 
 </style>
+<style id="ao-role-navigation-no-flash">html:not([data-ao-role-ready="true"]) #cartBtn,html:not([data-ao-role-ready="true"]) #wishBtn{visibility:hidden!important;pointer-events:none!important}</style>
 </head>
 <body id="top"><div id="ao-splash" class="ao-splash" role="status" aria-live="polite"
      aria-label="Ajay Outfits is preparing your shopping experience" aria-busy="true">
@@ -2610,8 +2611,8 @@ async function aoReturnHomeAfterSignOut(){
  window.scrollTo({top:0,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
 }
 $('#logoutBtn').addEventListener('click',async()=>{const db=window.ajaySupabase;if(!db){aoAuthMessage('Please try again once account services are available.','error');return}const button=$('#logoutBtn'),shortcuts=document.getElementById('aoAccountActions');button.disabled=true;if(shortcuts)shortcuts.hidden=true;try{const {error}=await db.auth.signOut({scope:'local'});if(error)throw error;await aoReturnHomeAfterSignOut();toast('Signed out')}catch(err){aoAuthMessage(err?.message||'Sign out failed. Please try again.','error');try{await aoRefreshAuthUI();aoSyncTopAccount()}catch(_){}}finally{button.disabled=false}});
-window.aoSupabaseReady.then(db=>{if(db){db.auth.onAuthStateChange((event,session)=>{if(event!=='SIGNED_OUT'&&((typeof aoIsEmailConfirmationReturn==='function')&&aoIsEmailConfirmationReturn()))return;if(event!=='SIGNED_OUT'&&(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl()))){profile=null;window.aoCurrentUser=null;try{aoCurrentUser=null;aoCurrentRole='customer';aoCurrentRoleRow=null;window.aoCurrentRole='customer';window.aoCurrentRoleRow=null;aoUpdateRoleLinks()}catch(_){}aoSyncTopAccount();const ordersBtn=document.getElementById('aoMyOrdersButton');if(ordersBtn){ordersBtn.hidden=true;ordersBtn.style.display='none'}return;}if(!session?.user){profile=null;window.aoCurrentUser=null;try{aoCurrentUser=null;aoCurrentRole='customer';aoCurrentRoleRow=null;window.aoCurrentRole='customer';window.aoCurrentRoleRow=null;aoUpdateRoleLinks()}catch(_){}aoSyncTopAccount();const ordersBtn=document.getElementById('aoMyOrdersButton');if(ordersBtn){ordersBtn.hidden=true;ordersBtn.style.display='none'}if(event==='SIGNED_OUT'){setTimeout(()=>{document.querySelectorAll('.modal.show').forEach(m=>m.classList.remove('show'));document.getElementById('drawerOverlay')?.classList.remove('show');window.scrollTo({top:0,behavior:'auto'});},0)}window.dispatchEvent(new CustomEvent('ao:auth-change',{detail:{user:null}}));}else{const previousId=String(aoCurrentUser?.id||window.aoCurrentUser?.id||'');const nextId=String(session.user?.id||'');if(previousId!==nextId){aoCurrentRole='customer';aoCurrentRoleRow=null;window.aoCurrentRole='customer';window.aoCurrentRoleRow=null;try{aoUpdateRoleLinks()}catch(_){}}window.aoCurrentUser=session.user;try{aoCurrentUser=session.user}catch(_){}if(event==='SIGNED_IN'||previousId!==nextId)window.dispatchEvent(new CustomEvent('ao:auth-change',{detail:{user:session.user}}));}aoRefreshAuthUI()})}});
-let aoCurrentUser=null,aoCurrentRole='customer',aoCurrentRoleRow=null;
+window.aoSupabaseReady.then(db=>{if(db){db.auth.onAuthStateChange((event,session)=>{if(event!=='SIGNED_OUT'&&((typeof aoIsEmailConfirmationReturn==='function')&&aoIsEmailConfirmationReturn()))return;if(event!=='SIGNED_OUT'&&(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl()))){profile=null;window.aoCurrentUser=null;try{aoCurrentUser=null;aoCurrentRole='customer';aoCurrentRoleRow=null;window.aoCurrentRole='customer';window.aoCurrentRoleRow=null;window.__AO_ROLE_READY__=true;aoUpdateRoleLinks()}catch(_){}aoSyncTopAccount();const ordersBtn=document.getElementById('aoMyOrdersButton');if(ordersBtn){ordersBtn.hidden=true;ordersBtn.style.display='none'}return;}if(!session?.user){profile=null;window.aoCurrentUser=null;try{aoCurrentUser=null;aoCurrentRole='customer';aoCurrentRoleRow=null;window.aoCurrentRole='customer';window.aoCurrentRoleRow=null;window.__AO_ROLE_READY__=true;document.documentElement.dataset.aoRoleReady='true';aoUpdateRoleLinks()}catch(_){}aoSyncTopAccount();const ordersBtn=document.getElementById('aoMyOrdersButton');if(ordersBtn){ordersBtn.hidden=true;ordersBtn.style.display='none'}if(event==='SIGNED_OUT'){setTimeout(()=>{document.querySelectorAll('.modal.show').forEach(m=>m.classList.remove('show'));document.getElementById('drawerOverlay')?.classList.remove('show');window.scrollTo({top:0,behavior:'auto'});},0)}window.dispatchEvent(new CustomEvent('ao:auth-change',{detail:{user:null}}));}else{const previousId=String(aoCurrentUser?.id||window.aoCurrentUser?.id||'');const nextId=String(session.user?.id||'');if(previousId!==nextId){window.__AO_ROLE_READY__=false;document.documentElement.dataset.aoRoleReady='false';aoCurrentRole='customer';aoCurrentRoleRow=null;window.aoCurrentRole='customer';window.aoCurrentRoleRow=null;try{aoUpdateRoleLinks()}catch(_){}}window.aoCurrentUser=session.user;try{aoCurrentUser=session.user}catch(_){}if(event==='SIGNED_IN'||previousId!==nextId)window.dispatchEvent(new CustomEvent('ao:auth-change',{detail:{user:session.user}}));}aoRefreshAuthUI()})}});
+let aoCurrentUser=null,aoCurrentRole='customer',aoCurrentRoleRow=null;window.__AO_ROLE_READY__=false;document.documentElement.dataset.aoRoleReady='false';
 // Resolve the persisted seller decision from both fields, accounting for stale top-level status values.
 function aoResolveSellerDecision(a){
  const valid={approved:'Approved',rejected:'Rejected',disapproved:'Disapproved','pending review':'Pending review',pending:'Pending review'};
@@ -2628,17 +2629,18 @@ window.aoResolveSellerDecision=aoResolveSellerDecision;
 async function aoLoadCustomerPhone(user){if(!user?.id)return '';let phone=String(user.user_metadata?.phone||'');try{const db=window.ajaySupabase;if(db){const {data,error}=await db.from('ao_customer_profiles').select('phone').eq('user_id',user.id).maybeSingle();if(!error&&data?.phone)phone=String(data.phone)}}catch(err){console.warn('Could not load saved customer phone:',err?.message||err)}profile={...(profile||{}),phone};return phone;}
 window.aoLoadCustomerPhone=aoLoadCustomerPhone;
 async function aoLoadRole(){
+ if(!window.__AO_ROLE_READY__)window.__AO_ROLE_READY__=false;
  if(!window.ajaySupabase && window.aoSupabaseReady){try{await window.aoSupabaseReady}catch(_){}}
  const db=window.ajaySupabase;
  const syncRoleGlobals=()=>{window.aoCurrentUser=aoCurrentUser;window.aoCurrentRole=aoCurrentRole;window.aoCurrentRoleRow=aoCurrentRoleRow};
  const setCustomer=()=>{aoCurrentRole='customer';aoCurrentRoleRow=null;syncRoleGlobals();try{aoUpdateRoleLinks()}catch(_){}};
- if(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl())){aoCurrentUser=null;setCustomer();return;}
- if(!db){aoCurrentUser=null;profile=null;setCustomer();return;}
+ if(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl())){aoCurrentUser=null;setCustomer();window.__AO_ROLE_READY__=true;document.documentElement.dataset.aoRoleReady='true';return;}
+ if(!db){aoCurrentUser=null;profile=null;setCustomer();window.__AO_ROLE_READY__=true;document.documentElement.dataset.aoRoleReady='true';return;}
  let session;
  try{const result=await db.auth.getSession();if(result?.error)throw result.error;session=result?.data?.session||null;}
  catch(err){console.warn('[Role] Session refresh deferred; keeping the current signed-in state:',err?.message||err);return;}
  const nextUser=session?.user||null;
- if(!nextUser){aoCurrentUser=null;profile=null;setCustomer();try{renderSellerDashboard()}catch(_){}return;}
+ if(!nextUser){aoCurrentUser=null;profile=null;setCustomer();window.__AO_ROLE_READY__=true;document.documentElement.dataset.aoRoleReady='true';try{renderSellerDashboard()}catch(_){}return;}
  const previousUserId=String(aoCurrentUser?.id||'');
  const sameUser=previousUserId===String(nextUser.id||'');
  aoCurrentUser=nextUser;window.aoCurrentUser=nextUser;
@@ -2670,6 +2672,7 @@ async function aoLoadRole(){
  try{renderProducts();if($('#productModal')?.classList.contains('show')&&detailId)openProduct(detailId)}catch(err){console.warn('[Role] Storefront role refresh deferred:',err?.message||err)}
  try{aoMaybeNotifySellerDecision()}catch(_){}
  try{renderSellerDashboard()}catch(err){console.warn('[Role] Dashboard refresh deferred:',err?.message||err)}
+ window.__AO_ROLE_READY__=true;document.documentElement.dataset.aoRoleReady='true';
 }
 function aoIsAdmin(){return !!(aoCurrentUser&&aoCurrentRole==='admin')}
 function aoHasAdminRole(){return aoIsAdmin()}
@@ -4415,7 +4418,7 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
   }
  }
  function collect(){const d=read(),states=d.states||{}, notices=d.notices||[], seen=new Set(d.seen||[]);let changed=false;const now=Date.now(),appsReady=!!window.__aoInitialSellerHydrationComplete;
-  const appBaseline=d.appBaseline===true||(d.baseline===true&&Object.keys(states).some(k=>k.startsWith('app:')));
+  const appBaseline=d.appBaseline===true||(d.baseline===true&&Object.keys(states).some(k=>k.startsWith('app:')));if(d.baseline&&!d.orderBaselineAt){d.orderBaselineAt=now;changed=true;}if(appsReady&&!d.appBaselineAt){d.appBaselineAt=now;changed=true;}
   if(!appsReady&&!window.__aoInitialOrderHydrationComplete)return d;
   // Clean legacy status-change notices that the older version incorrectly routed to staff.
   for(let i=notices.length-1;i>=0;i--){const n=notices[i];if(n?.kind!=='application')continue;if(n.title==='Seller application updated'||n.title==='Seller application status updated'){notices.splice(i,1);changed=true;continue;}if(!isAdmin()){const ownsNotice=allApps().some(a=>String(a.id||a.user_id||a.email||'')===String(n.sellerId||'')&&(String(a.user_id||'')===String(uid())||!!(a.email&&typeof aoCurrentUser!=='undefined'&&String(a.email).toLowerCase()===String(aoCurrentUser?.email||'').toLowerCase())));if(!ownsNotice){notices.splice(i,1);changed=true;}}}
@@ -4424,7 +4427,7 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
    // Whole-order status/payment notices remain separate from seller-line notices.
    const actorId=String(o.updatedBy||o.lastUpdatedBy||o.updated_by||'');
    const localOrderActor=window.__aoLocalOrderActors?.get(id);const ownUpdate=(!!actorId&&actorId===String(uid()))||!!(localOrderActor&&localOrderActor.actorId===String(uid())&&now-Number(localOrderActor.at||0)<120000&&orderState(o)!==String(localOrderActor.beforeState||''));
-   if(prev===undefined){if(d.baseline&&!ownUpdate){const k='order:'+id+':'+st;seen.delete(k);if(!notices.some(n=>n.key===k)){notices.unshift({key:k,kind:'order',target:'orders',orderId:id,title:isAdmin()?'New customer order':'New order for your shop',detail:`Order ${id} · ${o.status||o.orderStatus||'Order Received'} · Payment ${o.paymentStatus||o.payment_status||'Pending'}`,time:now});changed=true}}states[id]=st;changed=true}
+   if(prev===undefined){const createdAt=Date.parse(o.created_at||o.createdAt||o.orderDate||'')||0;const genuinelyNew=!!(d.orderBaselineAt&&createdAt>d.orderBaselineAt);if(d.baseline&&genuinelyNew&&!ownUpdate){const k='order:'+id+':'+st;seen.delete(k);if(!notices.some(n=>n.key===k)){notices.unshift({key:k,kind:'order',target:'orders',orderId:id,title:isAdmin()?'New customer order':'New order for your shop',detail:`Order ${id} · ${o.status||o.orderStatus||'Order Received'} · Payment ${o.paymentStatus||o.payment_status||'Pending'}`,time:now});changed=true}}states[id]=st;changed=true}
    else if(prev!==st){if(!ownUpdate){const beforeParts=String(prev).split('|'),afterParts=String(st).split('|'),paymentOnly=beforeParts[1]!==afterParts[1];for(let i=notices.length-1;i>=0;i--){const old=notices[i];if(old?.kind==='order'&&String(old.orderId||'')===id&&!old.itemIdentity){notices.splice(i,1);changed=true}}const k='order:'+id+':'+st;seen.delete(k);if(!notices.some(n=>n.key===k)){notices.unshift({key:k,kind:'order',target:paymentOnly?'payment':'orders',orderId:id,title:paymentOnly?'Payment updated':'Order updated',detail:`Order ${id} · ${o.status||o.orderStatus||'Order Received'} · Payment ${o.paymentStatus||o.payment_status||'Pending'}`,time:now});changed=true}}states[id]=st;changed=true}
    // Track each seller's product line as well as the order total. This catches
    // fulfilment/payment changes made by another staff role, without notifying
@@ -4466,10 +4469,11 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
    const owns=String(a.user_id||'')===String(uid())||!!(a.email&&currentUser?.email&&String(a.email).toLowerCase()===String(currentUser.email).toLowerCase());
    if(!isAdmin()&&!owns)continue;
    if(isAdmin()&&st.trim().toLowerCase()==='pending review'){
+    const applicationCreatedAt=Date.parse(a.created_at||a.createdAt||'')||0;const genuinelyNewApplication=!!(d.appBaselineAt&&applicationCreatedAt>d.appBaselineAt);
     const nk='application:'+id+':'+String(a.created_at||a.updated_at||st);
     const adminAlreadyInApplications=!!($('#adminModal')?.classList.contains('show')||($('#aoStandaloneDashboard')?.classList.contains('show')&&String($('#aoStandaloneTitle')?.textContent||'').toLowerCase().includes('store management')));
     if(adminAlreadyInApplications){window.aoSellerApplicationFilter='Pending review';if(typeof updateAdmin==='function')updateAdmin();seen.add(nk);changed=true;}
-    else if(!notices.some(n=>n.key===nk)&&!seen.has(nk)){notices.unshift({key:nk,kind:'application',target:'applications',sellerId:id,title:'New seller application',detail:`${a.shop_name||a.shopName||a.name||a.email||'A seller'} · ${st}`,time:now});changed=true;}
+    else if(genuinelyNewApplication&&!notices.some(n=>n.key===nk)&&!seen.has(nk)){notices.unshift({key:nk,kind:'application',target:'applications',sellerId:id,title:'New seller application',detail:`${a.shop_name||a.shopName||a.name||a.email||'A seller'} · ${st}`,time:now});changed=true;}
    }
    states[sk]=st;
    const decisionStatus=decisionOf(a);
@@ -4478,13 +4482,13 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
     const dec=a.decision_notification,nk='application-decision:'+id+':'+decisionStatus+':'+decisionStamp(a),sharedKey=decisionReadKey(a,decisionStatus);
     for(let i=notices.length-1;i>=0;i--){const n=notices[i];if(n?.kind==='application'&&String(n.sellerId||'')===id&&String(n.key||'').startsWith('application-decision:')&&n.key!==nk){notices.splice(i,1);changed=true;}}
     let sharedRead=false;try{sharedRead=localStorage.getItem(sharedKey)==='1'}catch(_){}
-    if(sharedRead)seen.add(nk);
-    else if(!notices.some(n=>n.key===nk)&&!seen.has(nk)){notices.unshift({key:nk,kind:'application',target:'application-status',sellerId:id,decisionStatus,decisionReadKey:sharedKey,title:decisionStatus==='Approved'?'Congratulations — seller application approved':decisionStatus==='Disapproved'?'Seller privileges withdrawn':'Seller application rejected',detail:decisionStatus==='Approved'?'Your seller application has been approved. You can now start selling with Ajay Outfits. Open this notification to access your Seller Dashboard.':decisionStatus==='Disapproved'?'Your seller privileges have been withdrawn. Your account now has standard customer access.':'Your seller application was not approved at this time. You may contact Ajay Outfits support for assistance.',time:Date.parse(dec.created_at||'')||now});changed=true;}
+    const decisionCreatedAt=Date.parse(dec.created_at||a.updated_at||'')||0;const genuinelyNewDecision=!!(d.appBaselineAt&&decisionCreatedAt>d.appBaselineAt);if(sharedRead)seen.add(nk);
+    else if(genuinelyNewDecision&&!notices.some(n=>n.key===nk)&&!seen.has(nk)){notices.unshift({key:nk,kind:'application',target:'application-status',sellerId:id,decisionStatus,decisionReadKey:sharedKey,title:decisionStatus==='Approved'?'Congratulations — seller application approved':decisionStatus==='Disapproved'?'Seller privileges withdrawn':'Seller application rejected',detail:decisionStatus==='Approved'?'Your seller application has been approved. You can now start selling with Ajay Outfits. Open this notification to access your Seller Dashboard.':decisionStatus==='Disapproved'?'Your seller privileges have been withdrawn. Your account now has standard customer access.':'Your seller application was not approved at this time. You may contact Ajay Outfits support for assistance.',time:Date.parse(dec.created_at||'')||now});changed=true;}
    }
    changed=true;
   }
   const seenBeforeContext=seen.size;syncStaffOrderContext(d,seen);if(seen.size!==seenBeforeContext)changed=true;for(let i=notices.length-1;i>=0;i--){if(seen.has(notices[i]?.key)){notices.splice(i,1);changed=true}}
-  if(!d.baseline){d.baseline=true;changed=true}if(appsReady&&!d.appBaseline){d.appBaseline=true;changed=true}const uniqueNotices=[];const noticeKeys=new Set(),ownerByApplicationId=new Map(),latestIdByOwner=new Map();for(const app of appList){const appId=String(app.id||app.user_id||app.email||''),owner=String(app.user_id||app.email||'').trim().toLowerCase();if(appId&&owner){ownerByApplicationId.set(appId,owner);if(latestDecisionAppByOwner.get(owner)===app)latestIdByOwner.set(owner,appId);}}const decisionOwners=new Set();for(const n of notices){if(!n||!n.key||noticeKeys.has(n.key))continue;noticeKeys.add(n.key);if(n.kind==='application'&&String(n.key).startsWith('application-decision:')){const appId=String(n.sellerId||String(n.key).split(':')[1]||''),owner=ownerByApplicationId.get(appId);if(owner){if(latestIdByOwner.has(owner)&&latestIdByOwner.get(owner)!==appId){changed=true;continue;}if(decisionOwners.has(owner)){changed=true;continue;}decisionOwners.add(owner);}}uniqueNotices.push(n)}d.states=states;d.notices=uniqueNotices.slice(0,120);d.seen=[...seen].slice(-300);if(changed||uniqueNotices.length!==notices.length)save(d);return d;
+  if(!d.baseline){d.baseline=true;d.orderBaselineAt=now;changed=true}if(appsReady&&!d.appBaseline){d.appBaseline=true;d.appBaselineAt=now;changed=true}const uniqueNotices=[];const noticeKeys=new Set(),ownerByApplicationId=new Map(),latestIdByOwner=new Map();for(const app of appList){const appId=String(app.id||app.user_id||app.email||''),owner=String(app.user_id||app.email||'').trim().toLowerCase();if(appId&&owner){ownerByApplicationId.set(appId,owner);if(latestDecisionAppByOwner.get(owner)===app)latestIdByOwner.set(owner,appId);}}const decisionOwners=new Set();for(const n of notices){if(!n||!n.key||noticeKeys.has(n.key))continue;noticeKeys.add(n.key);if(n.kind==='application'&&String(n.key).startsWith('application-decision:')){const appId=String(n.sellerId||String(n.key).split(':')[1]||''),owner=ownerByApplicationId.get(appId);if(owner){if(latestIdByOwner.has(owner)&&latestIdByOwner.get(owner)!==appId){changed=true;continue;}if(decisionOwners.has(owner)){changed=true;continue;}decisionOwners.add(owner);}}uniqueNotices.push(n)}d.states=states;d.notices=uniqueNotices.slice(0,120);d.seen=[...seen].slice(-300);if(changed||uniqueNotices.length!==notices.length)save(d);return d;
  }
  function ensureModal(){let m=$('#aoSellerNotificationsModal');if(m)return m;m=document.createElement('div');m.className='modal';m.id='aoSellerNotificationsModal';m.innerHTML='<div class="modalbox ao-notifications-box" style="max-width:680px"><div class="drawer-head"><div><span class="eyebrow">AJAY OUTFITS</span><h2>Notifications</h2></div><button type="button" class="close" data-close="aoSellerNotificationsModal" aria-label="Close notifications">×</button></div><div class="ao-notification-toolbar"><p style="color:var(--muted)">Order arrivals, order status and payment changes, and seller application activity.</p><button type="button" id="aoStaffMarkAllRead" class="btn secondary ao-mark-all-read" hidden>Mark all as read</button></div><div class="ao-notify-list" id="aoSellerNotificationList"></div></div>';document.body.appendChild(m);m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')});m.querySelector('[data-close]').addEventListener('click',()=>m.classList.remove('show'));return m}
  function openNotifications(){
@@ -6831,6 +6835,16 @@ img{height:auto}
 }
 </style>
 
+
+<style id="ao-role-icons-hidden-attribute-fix">
+/* Preserve the role controller's hidden state even where mobile icon rules use display: !important. */
+.header .actions #cartBtn[hidden],
+.header .actions #wishBtn[hidden] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+</style>
 </body>
 <!-- AjayOutfits VERSION 95: admin can permanently delete approved or rejected reviews; existing theme tokens and typography retained. -->
 </html>
