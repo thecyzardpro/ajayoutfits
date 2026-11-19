@@ -1919,6 +1919,46 @@ window.aoSupabaseReady = (function initAjaySupabase(){
     window.setTimeout(() => finish(window.ajaySupabase), 15000);
   });
 })();
+// Native Android/iOS push-token registration. The wrapper dispatches this event after
+// Expo returns a device token. Tokens are saved only for the currently authenticated user.
+(function installAjayNativePushTokenBridge(){
+ if(window.__AO_NATIVE_PUSH_TOKEN_BRIDGE__)return;
+ window.__AO_NATIVE_PUSH_TOKEN_BRIDGE__=true;
+ let pending=null, saving=false, lastSaved='';
+ async function savePendingToken(){
+  if(saving||!pending)return;
+  const db=window.ajaySupabase;
+  if(!db?.auth||!db?.from)return;
+  saving=true;
+  try{
+   const {data,error}=await db.auth.getUser();
+   if(error)throw error;
+   const user=data?.user;
+   if(!user?.id)return;
+   const token=String(pending.token||'').trim();
+   const platform=String(pending.platform||'unknown').slice(0,20);
+   if(!token||token===lastSaved)return;
+   const {error:saveError}=await db.from('ao_device_push_tokens').upsert({
+    user_id:user.id,expo_push_token:token,platform,updated_at:new Date().toISOString()
+   },{onConflict:'expo_push_token'});
+   if(saveError)throw saveError;
+   lastSaved=token;
+   console.info('[Ajay push] Device token registered for signed-in account.');
+  }catch(err){console.warn('[Ajay push] Device token could not be saved:',err?.message||err)}
+  finally{saving=false}
+ }
+ window.addEventListener('ao:native-push-token',event=>{
+  const d=event?.detail||{};
+  if(d.token)pending={token:d.token,platform:d.platform||'unknown'};
+  void savePendingToken();
+ });
+ window.addEventListener('ao:auth-change',()=>{if(pending)void savePendingToken()});
+ window.aoSupabaseReady?.then(db=>{
+  if(!db?.auth)return;
+  db.auth.onAuthStateChange(()=>{if(pending)setTimeout(savePendingToken,0)});
+  if(pending)void savePendingToken();
+ });
+})();
 const seedProducts=[
 {id:'p1',brand:'NIKE',name:'Air Max Pulse',category:'Sneakers',price:145,oldPrice:170,size:'US 7–13',condition:'New',tag:'Trending',seller:'Ajay Outfits',image:'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=85',isNew:true,desc:'A statement silhouette built for everyday rotation. Clean lines, bold color and all-day comfort.'},
 {id:'p2',brand:'JORDAN',name:'Air Jordan Retro High',category:'Sneakers',price:210,size:'US 6–13',condition:'New',tag:'Iconic',seller:'Ajay Outfits',image:'https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=900&q=85',isNew:true,desc:'A timeless court-inspired profile with a premium finish. A foundational piece for any sneaker collection.'},
@@ -2570,10 +2610,8 @@ async function aoReturnHomeAfterSignOut(){
  window.scrollTo({top:0,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
 }
 $('#logoutBtn').addEventListener('click',async()=>{const db=window.ajaySupabase;if(!db){aoAuthMessage('Please try again once account services are available.','error');return}const button=$('#logoutBtn'),shortcuts=document.getElementById('aoAccountActions');button.disabled=true;if(shortcuts)shortcuts.hidden=true;try{const {error}=await db.auth.signOut({scope:'local'});if(error)throw error;await aoReturnHomeAfterSignOut();toast('Signed out')}catch(err){aoAuthMessage(err?.message||'Sign out failed. Please try again.','error');try{await aoRefreshAuthUI();aoSyncTopAccount()}catch(_){}}finally{button.disabled=false}});
-window.aoSupabaseReady.then(db=>{if(db){db.auth.onAuthStateChange((event,session)=>{if(event!=='SIGNED_OUT'&&((typeof aoIsEmailConfirmationReturn==='function')&&aoIsEmailConfirmationReturn()))return;if(event!=='SIGNED_OUT'&&(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl()))){profile=null;window.aoCurrentUser=null;try{aoCurrentUser=null;aoCurrentRole='customer';aoCurrentRoleRow=null;window.aoCurrentRole='customer';window.aoCurrentRoleRow=null;aoUpdateRoleLinks()}catch(_){}aoSyncTopAccount();const ordersBtn=document.getElementById('aoMyOrdersButton');if(ordersBtn){ordersBtn.hidden=true;ordersBtn.style.display='none'}return;}if(!session?.user){profile=null;window.aoCurrentUser=null;try{aoCurrentUser=null;aoCurrentRole='customer';aoCurrentRoleRow=null;window.aoCurrentRole='customer';window.aoCurrentRoleRow=null;aoUpdateRoleLinks()}catch(_){}aoSyncTopAccount();const ordersBtn=document.getElementById('aoMyOrdersButton');if(ordersBtn){ordersBtn.hidden=true;ordersBtn.style.display='none'}if(event==='SIGNED_OUT'){setTimeout(()=>{document.querySelectorAll('.modal.show').forEach(m=>m.classList.remove('show'));document.getElementById('drawerOverlay')?.classList.remove('show');window.scrollTo({top:0,behavior:'auto'});},0)}window.dispatchEvent(new CustomEvent('ao:auth-change',{detail:{user:null}}));}else{const previousId=String(aoCurrentUser?.id||window.aoCurrentUser?.id||'');const nextId=String(session.user?.id||'');if(previousId!==nextId){window.__aoRoleResolutionState='pending';aoCurrentRole='customer';aoCurrentRoleRow=null;window.aoCurrentRole='customer';window.aoCurrentRoleRow=null;try{aoUpdateRoleLinks()}catch(_){}}window.aoCurrentUser=session.user;try{aoCurrentUser=session.user}catch(_){}if(event==='SIGNED_IN'||previousId!==nextId)window.dispatchEvent(new CustomEvent('ao:auth-change',{detail:{user:session.user}}));}aoRefreshAuthUI()})}});
+window.aoSupabaseReady.then(db=>{if(db){db.auth.onAuthStateChange((event,session)=>{if(event!=='SIGNED_OUT'&&((typeof aoIsEmailConfirmationReturn==='function')&&aoIsEmailConfirmationReturn()))return;if(event!=='SIGNED_OUT'&&(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl()))){profile=null;window.aoCurrentUser=null;try{aoCurrentUser=null;aoCurrentRole='customer';aoCurrentRoleRow=null;window.aoCurrentRole='customer';window.aoCurrentRoleRow=null;aoUpdateRoleLinks()}catch(_){}aoSyncTopAccount();const ordersBtn=document.getElementById('aoMyOrdersButton');if(ordersBtn){ordersBtn.hidden=true;ordersBtn.style.display='none'}return;}if(!session?.user){profile=null;window.aoCurrentUser=null;try{aoCurrentUser=null;aoCurrentRole='customer';aoCurrentRoleRow=null;window.aoCurrentRole='customer';window.aoCurrentRoleRow=null;aoUpdateRoleLinks()}catch(_){}aoSyncTopAccount();const ordersBtn=document.getElementById('aoMyOrdersButton');if(ordersBtn){ordersBtn.hidden=true;ordersBtn.style.display='none'}if(event==='SIGNED_OUT'){setTimeout(()=>{document.querySelectorAll('.modal.show').forEach(m=>m.classList.remove('show'));document.getElementById('drawerOverlay')?.classList.remove('show');window.scrollTo({top:0,behavior:'auto'});},0)}window.dispatchEvent(new CustomEvent('ao:auth-change',{detail:{user:null}}));}else{const previousId=String(aoCurrentUser?.id||window.aoCurrentUser?.id||'');const nextId=String(session.user?.id||'');if(previousId!==nextId){aoCurrentRole='customer';aoCurrentRoleRow=null;window.aoCurrentRole='customer';window.aoCurrentRoleRow=null;try{aoUpdateRoleLinks()}catch(_){}}window.aoCurrentUser=session.user;try{aoCurrentUser=session.user}catch(_){}if(event==='SIGNED_IN'||previousId!==nextId)window.dispatchEvent(new CustomEvent('ao:auth-change',{detail:{user:session.user}}));}aoRefreshAuthUI()})}});
 let aoCurrentUser=null,aoCurrentRole='customer',aoCurrentRoleRow=null;
-// Role chrome is not ready until the persisted role for the active session is confirmed.
-window.__aoRoleResolutionState='pending';
 // Resolve the persisted seller decision from both fields, accounting for stale top-level status values.
 function aoResolveSellerDecision(a){
  const valid={approved:'Approved',rejected:'Rejected',disapproved:'Disapproved','pending review':'Pending review',pending:'Pending review'};
@@ -2589,11 +2627,11 @@ function aoResolveSellerDecision(a){
 window.aoResolveSellerDecision=aoResolveSellerDecision;
 async function aoLoadCustomerPhone(user){if(!user?.id)return '';let phone=String(user.user_metadata?.phone||'');try{const db=window.ajaySupabase;if(db){const {data,error}=await db.from('ao_customer_profiles').select('phone').eq('user_id',user.id).maybeSingle();if(!error&&data?.phone)phone=String(data.phone)}}catch(err){console.warn('Could not load saved customer phone:',err?.message||err)}profile={...(profile||{}),phone};return phone;}
 window.aoLoadCustomerPhone=aoLoadCustomerPhone;
-async function aoLoadRoleImpl(){
+async function aoLoadRole(){
  if(!window.ajaySupabase && window.aoSupabaseReady){try{await window.aoSupabaseReady}catch(_){}}
  const db=window.ajaySupabase;
  const syncRoleGlobals=()=>{window.aoCurrentUser=aoCurrentUser;window.aoCurrentRole=aoCurrentRole;window.aoCurrentRoleRow=aoCurrentRoleRow};
- const setCustomer=()=>{aoCurrentRole='customer';aoCurrentRoleRow=null;syncRoleGlobals();window.__aoRoleResolutionState='resolved';try{aoUpdateRoleLinks()}catch(_){}};
+ const setCustomer=()=>{aoCurrentRole='customer';aoCurrentRoleRow=null;syncRoleGlobals();try{aoUpdateRoleLinks()}catch(_){}};
  if(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl())){aoCurrentUser=null;setCustomer();return;}
  if(!db){aoCurrentUser=null;profile=null;setCustomer();return;}
  let session;
@@ -2627,25 +2665,17 @@ async function aoLoadRoleImpl(){
  }
  // Do not let a slow response for an account that has since changed overwrite the new account.
  try{const latest=await db.auth.getSession();const latestId=String(latest?.data?.session?.user?.id||'');if(latestId!==String(nextUser.id||'')){console.info('[Role] Ignored a stale role response for a previous account.');return;}}catch(_){}
- aoCurrentRole=resolvedRole;aoCurrentRoleRow=resolvedRow;syncRoleGlobals();window.__aoRoleResolutionState='resolved';
+ aoCurrentRole=resolvedRole;aoCurrentRoleRow=resolvedRow;syncRoleGlobals();
  try{aoUpdateRoleLinks()}catch(err){console.warn('[Role] Could not refresh role navigation:',err?.message||err)}
  try{renderProducts();if($('#productModal')?.classList.contains('show')&&detailId)openProduct(detailId)}catch(err){console.warn('[Role] Storefront role refresh deferred:',err?.message||err)}
  try{aoMaybeNotifySellerDecision()}catch(_){}
  try{renderSellerDashboard()}catch(err){console.warn('[Role] Dashboard refresh deferred:',err?.message||err)}
 }
-// Coalesce every role refresh (including legacy lexical calls) into one in-flight request.
-function aoLoadRole(){
- if(window.__aoRoleLoadPromise)return window.__aoRoleLoadPromise;
- const task=aoLoadRoleImpl();
- const wrapped=Promise.resolve(task).finally(()=>{if(window.__aoRoleLoadPromise===wrapped)window.__aoRoleLoadPromise=null});
- window.__aoRoleLoadPromise=wrapped;
- return wrapped;
-}
 function aoIsAdmin(){return !!(aoCurrentUser&&aoCurrentRole==='admin')}
 function aoHasAdminRole(){return aoIsAdmin()}
 function aoCanSell(){return !!(aoCurrentUser&&(aoCurrentRole==='seller'||aoCurrentRole==='admin'))}
 function aoIsStaff(){return aoIsAdmin()||aoCanSell()}
-function aoUpdateRoleLinks(){const adminRole=aoIsAdmin(),sellerRole=aoCanSell(),staff=adminRole||sellerRole;const admin=$('#adminLink'),seller=$('#sellerDashboardLink');if(admin){admin.hidden=!adminRole;admin.setAttribute('aria-hidden',String(!adminRole))}if(seller){seller.hidden=!sellerRole;seller.setAttribute('aria-hidden',String(!sellerRole));if(!sellerRole){seller.querySelector('.ao-notify-count')?.remove();seller.removeAttribute('data-notification-count')}}const cart=$('#cartBtn'),wish=$('#wishBtn');if(cart){cart.hidden=staff;cart.toggleAttribute('hidden',staff);cart.setAttribute('aria-hidden',String(staff));if(staff)cart.style.setProperty('display','none','important');else cart.style.removeProperty('display')}if(wish){wish.hidden=staff;wish.toggleAttribute('hidden',staff);wish.setAttribute('aria-hidden',String(staff));if(staff)wish.style.setProperty('display','none','important');else wish.style.removeProperty('display')}const topOrders=$('#aoTopOrders'),accountOrders=$('#aoDashboardOrders');if(topOrders){topOrders.hidden=false;topOrders.setAttribute('aria-hidden','false');topOrders.setAttribute('aria-label',staff?'Customer Orders':'My Orders');topOrders.title=staff?'Customer Orders':'My Orders'}if(accountOrders){accountOrders.hidden=false;accountOrders.setAttribute('aria-hidden','false');const label=accountOrders.querySelector('b');if(label)label.textContent=staff?'Customer Orders':'My Orders'}const dashboardCart=$('#aoDashboardCart'),dashboardWishlist=$('#aoDashboardWishlist');if(dashboardCart){dashboardCart.hidden=staff;dashboardCart.setAttribute('aria-hidden',String(staff))}if(dashboardWishlist){dashboardWishlist.hidden=staff;dashboardWishlist.setAttribute('aria-hidden',String(staff))}const ordersLabel=$('#aoMyOrdersButton');if(ordersLabel)ordersLabel.textContent=staff?'Customer Orders & receipts':'My Orders & receipts';const heading=$('#aoOrdersModal .drawer-head h2');if(heading)heading.textContent=staff?'Customer Orders':'My Orders';if(!adminRole)closeModal('adminModal');if(!sellerRole)closeModal('sellerDashboardModal')}
+function aoUpdateRoleLinks(){const adminRole=aoIsAdmin(),sellerRole=aoCanSell(),staff=adminRole||sellerRole;const admin=$('#adminLink'),seller=$('#sellerDashboardLink');if(admin){admin.hidden=!adminRole;admin.setAttribute('aria-hidden',String(!adminRole))}if(seller){seller.hidden=!sellerRole;seller.setAttribute('aria-hidden',String(!sellerRole));if(!sellerRole){seller.querySelector('.ao-notify-count')?.remove();seller.removeAttribute('data-notification-count')}}const cart=$('#cartBtn'),wish=$('#wishBtn');if(cart){cart.hidden=staff;cart.setAttribute('aria-hidden',String(staff))}if(wish){wish.hidden=staff;wish.setAttribute('aria-hidden',String(staff))}const topOrders=$('#aoTopOrders'),accountOrders=$('#aoDashboardOrders');if(topOrders){topOrders.hidden=false;topOrders.setAttribute('aria-hidden','false');topOrders.setAttribute('aria-label',staff?'Customer Orders':'My Orders');topOrders.title=staff?'Customer Orders':'My Orders'}if(accountOrders){accountOrders.hidden=false;accountOrders.setAttribute('aria-hidden','false');const label=accountOrders.querySelector('b');if(label)label.textContent=staff?'Customer Orders':'My Orders'}const dashboardCart=$('#aoDashboardCart'),dashboardWishlist=$('#aoDashboardWishlist');if(dashboardCart){dashboardCart.hidden=staff;dashboardCart.setAttribute('aria-hidden',String(staff))}if(dashboardWishlist){dashboardWishlist.hidden=staff;dashboardWishlist.setAttribute('aria-hidden',String(staff))}const ordersLabel=$('#aoMyOrdersButton');if(ordersLabel)ordersLabel.textContent=staff?'Customer Orders & receipts':'My Orders & receipts';const heading=$('#aoOrdersModal .drawer-head h2');if(heading)heading.textContent=staff?'Customer Orders':'My Orders';if(!adminRole)closeModal('adminModal');if(!sellerRole)closeModal('sellerDashboardModal')}
 window.aoLoadRole=aoLoadRole;window.aoIsAdmin=aoIsAdmin;window.aoCanSell=aoCanSell;window.aoIsStaff=aoIsStaff;window.aoUpdateRoleLinks=aoUpdateRoleLinks;
 async function aoEnsureSignedIn(){if(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl()))return false;const db=window.ajaySupabase;if(!db){toast('Account services are not connected yet');await aoRefreshAuthUI();openModal('accountModal');return false}const {data:{session}}=await db.auth.getSession();if(!session?.user){await aoRefreshAuthUI();aoSetAuthMode('login');aoAuthMessage('Sign in to continue.','info');openModal('accountModal');return false}aoCurrentUser=session.user;return true}
 function renderSellerDashboard(){
@@ -2881,18 +2911,31 @@ $('#newsletterForm').addEventListener('submit',async e=>{
  const setMessage=(text,state)=>{message.textContent=text;message.dataset.state=state||'';};
  if(!email||!input.checkValidity()){input.reportValidity();return;}
  const db=window.ajaySupabase;
- if(!db||typeof db.functions?.invoke!=='function'){
+ if(!db||typeof db.functions?.invoke!=='function'||!db.auth?.getUser){
    setMessage('Newsletter sign-up is temporarily unavailable. Please try again later.','error');
    return;
  }
- button.disabled=true;button.setAttribute('aria-busy','true');setMessage('Joining the newsletter…','loading');
+ button.disabled=true;button.setAttribute('aria-busy','true');setMessage('Checking your account…','loading');
  try{
+   const {data:userData,error:userError}=await db.auth.getUser();
+   const user=userData?.user;
+   if(userError||!user?.id||!user?.email){
+     setMessage('Please sign in to your Ajay Outfits account before joining the newsletter.','error');
+     return;
+   }
+   if(String(user.email).trim().toLowerCase()!==email){
+     setMessage('This email does not match your signed-in account. Enter your account email to continue.','error');
+     return;
+   }
+   setMessage('Joining the newsletter…','loading');
    const {data,error}=await db.functions.invoke('ajay-newsletter-subscribe',{body:{email}});
    if(error){
      let detail='';
      try{detail=String(error.context?.body?.error||error.message||'')}catch(_){detail=String(error.message||'')}
      if(/already subscribed|already on the list/i.test(detail)){
        form.reset();setMessage('You’re already on the list. Thanks for being with Ajay Outfits!','success');
+     }else if(/sign in|session|account email|match your account/i.test(detail)){
+       setMessage(detail||'Please sign in with the same email address you entered.','error');
      }else if(/not configured|BREVO_NEWSLETTER_LIST_ID|BREVO_NEWSLETTER_API_KEY/i.test(detail)){
        setMessage('Newsletter email service is not fully configured yet. Please try again later.','error');
      }else{
@@ -2903,9 +2946,10 @@ $('#newsletterForm').addEventListener('submit',async e=>{
    }
    if(data?.alreadySubscribed){form.reset();setMessage('You’re already on the list. Thanks for being with Ajay Outfits!','success');return;}
    if(!data?.success)throw new Error('Newsletter service did not confirm the subscription.');
+   // The subscribe endpoint no longer sends welcome emails. Only a newly-created Brevo contact is eligible here.
    if(data?.sendWelcome===true){
      try{
-       const welcome=await db.functions.invoke('ajay-newsletter-welcome',{body:{email,welcomeToken:data?.welcomeToken}});
+       const welcome=await db.functions.invoke('ajay-newsletter-welcome',{body:{email}});
        if(welcome.error||!welcome.data?.success)console.warn('[Newsletter] Welcome email was not confirmed:',welcome.error?.message||welcome.data?.error||'Unknown error');
      }catch(welcomeError){console.warn('[Newsletter] Welcome email request failed:',welcomeError?.message||welcomeError);}
    }
@@ -3219,7 +3263,7 @@ window.__aoStorefrontHydrationPromise=(async()=>{
       const setBg=(el,p)=>{if(!el||!p||!p.image)return;el.style.backgroundImage='linear-gradient(180deg,rgba(8,9,11,.08),rgba(8,9,11,.80)),url("'+cleanImage(p.image)+'")';};
       document.querySelectorAll('.market-card[data-collection]').forEach((el,i)=>setBg(el,usable[(i*3)%usable.length]));
       document.querySelectorAll('.release-card').forEach((el,i)=>setBg(el,usable[(i+1)%usable.length]));
-      /* Journal images are owned by ao-section-image-management. Do not add a second background photo here. */
+      document.querySelectorAll('.editorial-card').forEach((el,i)=>setBg(el,usable[(i+2)%usable.length]));
     } catch(e) { /* Keep the built-in editorial imagery as a graceful fallback. */ }
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',applyAjayEditorialImages,{once:true});else applyAjayEditorialImages();
@@ -5139,14 +5183,13 @@ html[data-theme="dark"] #aoOrdersModal [data-ao-order-card].ao-notification-targ
     if(typeof window.aoLoadRole==='function') await window.aoLoadRole();
     if(typeof window.aoUpdateRoleLinks==='function') window.aoUpdateRoleLinks();
    }catch(err){console.warn('Could not resolve header role before display:',err)}
-   finally{if(window.__aoRoleResolutionState==='resolved'){root.classList.remove('ao-role-chrome-transition');root.classList.add('ao-role-chrome-ready')}else{root.classList.remove('ao-role-chrome-ready');root.classList.add('ao-role-chrome-transition')}running=null;}
+   finally{root.classList.remove('ao-role-chrome-transition');root.classList.add('ao-role-chrome-ready');running=null;}
   })();
   return running;
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',settleRole,{once:true});else settleRole();
  window.addEventListener('ao:auth-change',()=>{
   root.classList.add('ao-role-chrome-transition');
-  root.classList.remove('ao-role-chrome-ready');
   // Allow the auth listener to update the current session, then resolve admin/seller/customer role once.
   setTimeout(settleRole,0);
  });
@@ -5746,7 +5789,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
    try{window.aoUpdateRoleLinks?.()}catch(err){console.warn('[Role] Navigation sync deferred:',err?.message||err)}
    const role=window.aoIsAdmin?.()?'admin':window.aoCanSell?.()?'seller':'customer';
    const resolvedUser=userId();
-   if(window.__aoRoleResolutionState==='resolved')window.dispatchEvent(new CustomEvent('ao:role-resolved',{detail:{role,userId:resolvedUser,previousUserId:firstUser}}));
+   window.dispatchEvent(new CustomEvent('ao:role-resolved',{detail:{role,userId:resolvedUser,previousUserId:firstUser}}));
    return result;
   })().finally(()=>{active=null;root.classList.remove('ao-role-refreshing');if(rerun){rerun=false;wrapped.apply(caller,args).catch(err=>console.warn('[Role] Queued refresh deferred:',err?.message||err));}});
   return active;
@@ -6788,25 +6831,6 @@ img{height:auto}
 }
 </style>
 
-
-<style id="ao-1008-role-and-journal-image-source-fix">
-/* Staff accounts must not render customer-only shopping actions. */
-#cartBtn[hidden],#wishBtn[hidden],#aoDashboardCart[hidden],#aoDashboardWishlist[hidden]{display:none!important;visibility:hidden!important;pointer-events:none!important}
-/* The journal uses one managed image layer only; prevent the CSS fallback/product background showing through it. */
-#styleJournal .editorial-card:has(> .ao-section-image){background-image:none!important}
-#styleJournal .editorial-card > .ao-section-image{z-index:0!important;opacity:1!important;filter:none!important}
-#styleJournal .editorial-card::before{z-index:1!important}
-#styleJournal .editorial-card > :not(.ao-section-image){position:relative;z-index:2}
-@media(prefers-reduced-motion:reduce){#styleJournal .editorial-card > .ao-section-image{transition:none!important}}
-</style>
-<style id="ao-role-chrome-stability-v1010">
-/* Reveal the complete header action group as one unit after the account role is resolved. */
-html:not(.ao-role-chrome-ready) .header .actions,html.ao-role-chrome-transition .header .actions{visibility:hidden!important;opacity:0!important}
-html.ao-role-chrome-ready .header .actions{visibility:visible;opacity:1;transition:opacity .16s ease}
-html.ao-role-chrome-transition #adminLink,html.ao-role-chrome-transition #sellerDashboardLink{visibility:hidden!important;opacity:0!important}
-#adminLink,#sellerDashboardLink{transition:opacity .16s ease,color .16s ease}
-@media(prefers-reduced-motion:reduce){html.ao-role-chrome-ready .header .actions,#adminLink,#sellerDashboardLink{transition:none!important}}
-</style>
 </body>
 <!-- AjayOutfits VERSION 95: admin can permanently delete approved or rejected reviews; existing theme tokens and typography retained. -->
 </html>
