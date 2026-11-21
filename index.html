@@ -676,7 +676,6 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
 [data-theme="dark"] body,[data-theme=dark] body{background-image:radial-gradient(ellipse at 12% 8%,rgba(255,255,255,.035),transparent 38%),radial-gradient(ellipse at 90% 30%,rgba(160,170,185,.045),transparent 42%)}
 [data-theme="light"] body,[data-theme=light] body{background-image:radial-gradient(ellipse at 12% 8%,rgba(180,180,180,.08),transparent 38%),radial-gradient(ellipse at 90% 30%,rgba(210,210,210,.10),transparent 42%)}
 @media(max-width:600px){.logo-brand img{width:39px!important;height:39px!important}.footer .logo-brand img{width:45px!important;height:45px!important;flex-basis:45px!important}h1,h2,.hero-title,.section-title{letter-spacing:-.025em}}
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}}
 </style>
 
 <style id="ao-clean-brand-finish">
@@ -2416,7 +2415,10 @@ function aoSyncProductQuantity(requested,allowEmpty=false){
  return qty;
 }
 function aoCartStockIssue(items=cart){const seen=new Set();for(const item of items){const id=String(item.id);if(seen.has(id))continue;seen.add(id);const product=productById(id);if(!product)continue;const available=aoAvailableStock(product);const requested=items.filter(x=>String(x.id)===id).reduce((sum,x)=>sum+Math.max(0,Math.floor(Number(x.qty)||0)),0);if(requested>available)return {product,stock:available,requested};}return null}
-function addCart(id,size,quantity=1){if(aoIsStaff())return;const p=productById(id);if(!p)return;quantity=Math.max(1,Math.min(99,Math.floor(Number(quantity)||1)));const available=aoAvailableStock(p),already=cart.filter(i=>String(i.id)===String(id)).reduce((n,i)=>n+(Number(i.qty)||0),0);if(already+quantity>available){toast(available===0?'This item is currently out of stock.':'Only '+Math.max(0,available-already)+' more unit'+(available-already===1?'':'s')+' available to add.');return}const key=id+'|'+size;const found=cart.find(i=>i.key===key);if(found)found.qty+=quantity;else cart.push({key,id,size,qty:quantity});persist();updateCounts();renderCart();closeModal('productModal');toast('Added to cart')}
+let aoShoppingReturnScrollY=null;
+function aoRememberShoppingScroll(){aoShoppingReturnScrollY=window.scrollY||window.pageYOffset||0}
+function aoRestoreShoppingScroll(){if(aoShoppingReturnScrollY===null)return;const y=aoShoppingReturnScrollY;const restore=()=>window.scrollTo({top:y,left:0,behavior:'auto'});requestAnimationFrame(()=>{restore();requestAnimationFrame(restore)});setTimeout(restore,120);aoShoppingReturnScrollY=null}
+function addCart(id,size,quantity=1){if(aoIsStaff())return;const p=productById(id);if(!p)return;quantity=Math.max(1,Math.min(99,Math.floor(Number(quantity)||1)));const available=aoAvailableStock(p),already=cart.filter(i=>String(i.id)===String(id)).reduce((n,i)=>n+(Number(i.qty)||0),0);if(already+quantity>available){toast(available===0?'This item is currently out of stock.':'Only '+Math.max(0,available-already)+' more unit'+(available-already===1?'':'s')+' available to add.');aoRestoreShoppingScroll();return}const key=id+'|'+size;const found=cart.find(i=>i.key===key);if(found)found.qty+=quantity;else cart.push({key,id,size,qty:quantity});persist();updateCounts();renderCart();closeModal('productModal');toast('Added to cart');aoRestoreShoppingScroll()}
 function aoProductStockMarkup(product){const available=aoAvailableStock(product);return `<span class="ao-stock-availability ${available>0?'is-available':'is-soldout'}">${available>0?`Available in stock: ${available}`:'Out of stock'}</span>`}
 function aoRefreshOpenProductStock(product){if(!product||String(detailId)!==String(product.id))return;const host=$('#productDetail .ao-stock-detail');if(host)host.innerHTML=aoProductStockMarkup(product);const input=$('#productQuantity');if(input)aoSyncProductQuantity(input.value||1)}
 function renderCart(){$('#drawerTitle').textContent='Your cart';const content=$('#drawerContent');if(!cart.length){content.innerHTML='<div class="empty"><div class="ao-empty-cart-icon"><svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 8h14l1 13H4L5 8Z"/><path d="M9 8a3 3 0 0 1 6 0"/></svg></div><h3>Your cart is empty.</h3><p>Discover something worth rotating.</p><button class="btn" id="continueShopping">Explore pieces</button></div>';return}content.innerHTML=cart.map(i=>{const p=productById(i.id);if(!p)return'';return`<div class="cartitem"><img src="${safe(p.image)}" alt="" loading="lazy" decoding="async"><div><h4>${safe(p.name)}</h4><p>${safe(i.size)} · ${safe(p.seller)}</p><small class="ao-cart-stock">${aoAvailableStock(p)} available now</small><div class="qty"><button data-qty="${safe(i.key)}" data-delta="-1">−</button><span>${i.qty}</span><button data-qty="${safe(i.key)}" data-delta="1">+</button></div></div><b>${money(p.price*i.qty)}</b></div>`}).join('')+`<div class="total"><span>Subtotal</span><span>${money(cart.reduce((n,i)=>n+(productById(i.id)?.price||0)*i.qty,0))}</span></div><p style="color:var(--muted);font-size:11px">Shipping and taxes are calculated at checkout in a live store.</p><button class="btn full" id="checkoutBtn">Continue to checkout ↗︎</button><button class="chip full" id="clearCart" style="margin-top:10px">Clear bag</button>`}
@@ -2458,8 +2460,8 @@ $('#productDetail').addEventListener('click',async e=>{const quantityButton=e.ta
 $$('[data-close]').forEach(b=>b.addEventListener('click',()=>closeModal(b.dataset.close)));$$('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')}));
 let aoAuthMode='login';
 let aoPendingCustomerAction=null;
-async function aoRequireSignIn(action){if(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl()))return false;const db=window.ajaySupabase;let session=null;if(db){try{const r=await db.auth.getSession();session=r.data?.session||null}catch(_){}}if(session?.user){profile={name:session.user.user_metadata?.full_name||session.user.email?.split('@')[0]||'',email:session.user.email||''};if(typeof aoCustomerShoppingReady!=='undefined'){if(!aoCustomerShoppingHydrated||aoCustomerShoppingUserId!==String(session.user.id))aoCustomerShoppingReady=aoLoadCustomerShoppingState(session.user);await aoCustomerShoppingReady}return true}aoPendingCustomerAction=action;await aoRefreshAuthUI();aoSetAuthMode('login');aoAuthMessage('Please sign in or create an account to continue. Your selected action will continue after sign-in.','info');openModal('accountModal');return false}
-function aoApplyWishlist(id){if(aoIsStaff())return;const wasSaved=wishlist.includes(id);wishlist=wasSaved?wishlist.filter(x=>x!==id):[...wishlist,id];write('wishlist',wishlist);persist();updateCounts();renderProducts();toast(wasSaved?'Removed from wishlist':'Added to wishlist')}
+async function aoRequireSignIn(action){if(action?.type==='cart'||action?.type==='wishlist')aoRememberShoppingScroll();if(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl()))return false;const db=window.ajaySupabase;let session=null;if(db){try{const r=await db.auth.getSession();session=r.data?.session||null}catch(_){}}if(session?.user){profile={name:session.user.user_metadata?.full_name||session.user.email?.split('@')[0]||'',email:session.user.email||''};if(typeof aoCustomerShoppingReady!=='undefined'){if(!aoCustomerShoppingHydrated||aoCustomerShoppingUserId!==String(session.user.id))aoCustomerShoppingReady=aoLoadCustomerShoppingState(session.user);await aoCustomerShoppingReady}return true}aoPendingCustomerAction=action;await aoRefreshAuthUI();aoSetAuthMode('login');aoAuthMessage('Please sign in or create an account to continue. Your selected action will continue after sign-in.','info');openModal('accountModal');return false}
+function aoApplyWishlist(id){if(aoIsStaff())return;const wasSaved=wishlist.includes(id),isSaved=!wasSaved;wishlist=isSaved?[...wishlist,id]:wishlist.filter(x=>x!==id);write('wishlist',wishlist);persist();updateCounts();document.querySelectorAll('[data-wish]').forEach(button=>{if(String(button.dataset.wish)!==String(id))return;button.classList.toggle('saved',isSaved);button.setAttribute('aria-pressed',String(isSaved));button.setAttribute('aria-label',(isSaved?'Remove ':'Save ')+(productById(id)?.name||'product'));const icon=button.querySelector('svg');if(icon)icon.setAttribute('fill',isSaved?'currentColor':'none')});if(String(detailId)===String(id)){const detailButton=document.getElementById('addToWishlist');if(detailButton){detailButton.classList.toggle('is-saved',isSaved);detailButton.setAttribute('aria-pressed',String(isSaved));const label=detailButton.querySelector('span');if(label)label.textContent=isSaved?'Saved to wishlist':'Add to wishlist';const icon=detailButton.querySelector('svg');if(icon)icon.setAttribute('fill',isSaved?'currentColor':'none')}}toast(wasSaved?'Removed from wishlist':'Added to wishlist');aoRestoreShoppingScroll()}
 async function aoContinuePendingAction(){if(typeof aoCustomerShoppingReady!=='undefined')await aoCustomerShoppingReady;const action=aoPendingCustomerAction;aoPendingCustomerAction=null;if(!action)return;if(action.type==='cart'){addCart(action.id,action.size,action.qty||1);return}if(action.type==='wishlist'){aoApplyWishlist(action.id);return}if(action.type==='checkout'){if(!cart.length){toast('Your cart is empty');return}const total=cart.reduce((n,i)=>n+(productById(i.id)?.price||0)*i.qty,0);$('#checkoutSummary').innerHTML='<strong>Order summary</strong><br>'+cart.map(i=>{const p=productById(i.id);return p?safe(p.name)+' × '+i.qty+' — '+money(p.price*i.qty):''}).filter(Boolean).join('<br>')+'<br><strong>Subtotal ('+cart.reduce((n,i)=>n+i.qty,0)+' items): '+money(total)+'</strong><br><span style="color:var(--muted)">Shipping and taxes are calculated at checkout.</span>';if(profile){$('#coName').value=profile.name||'';$('#coEmail').value=profile.email||''}$('#drawerOverlay').classList.remove('show');openModal('checkoutModal')}}
 function aoSetAuthMode(mode){aoAuthMode=mode;const registering=mode==='register';const rules=$('#aoSignupRules');if(rules){rules.hidden=!registering;rules.setAttribute('aria-live','polite')}if(registering&&$('#customerPassword'))aoPaintPasswordRules($('#customerPassword'),rules);$('#authHeading').textContent=registering?'Create your account.':'Welcome back.';$('#authIntro').textContent=registering?'Join Ajay Outfits to keep your shopping journey connected.':'Sign in to access your account and enjoy a smoother shopping experience.';$('#authNameField').hidden=!registering;$('#customerName').required=registering;const phoneField=$('#authPhoneField'),phoneInput=$('#customerPhone');if(phoneField)phoneField.hidden=!registering;if(phoneInput)phoneInput.required=registering;$('#customerPassword').autocomplete=registering?'new-password':'current-password';$('#authSubmit').textContent=registering?'Create account ↗︎':'Sign in ↗︎';$('#authSwitchText').innerHTML=registering?'Already have an account? <button type="button" id="authSwitch" class="ao-auth-link">Sign in</button>':'New to Ajay Outfits? <button type="button" id="authSwitch" class="ao-auth-link">Create an account</button><br><button type="button" id="forgotPasswordBtn" class="ao-auth-link-button">Forgot password?</button>'; $('#aoForgotPanel').hidden=true;$('#aoResetPanel').hidden=true;$('#accountForm').hidden=false;$('#showLogin').hidden=false;$('#showRegister').hidden=false;$('#showLogin').classList.toggle('active',!registering);$('#showRegister').classList.toggle('active',registering);$('#showLogin').setAttribute('aria-selected',String(!registering));$('#showRegister').setAttribute('aria-selected',String(registering));$('#accountStatus').textContent='';$('#accountStatus').removeAttribute('data-kind');}
 document.addEventListener('input',e=>{if(e.target&&e.target.id==='customerPassword'&&aoAuthMode==='register')aoPaintPasswordRules(e.target,$('#aoSignupRules'));if(e.target&&e.target.id==='aoNewPassword')aoPaintPasswordRules(e.target,$('#aoResetRules'))},true);
@@ -2999,7 +3001,7 @@ $('#checkoutForm').addEventListener('submit',async e=>{
   if(!user){toast('Please sign in again before placing your order.');openModal('accountModal');return}
   window.aoCurrentUser=user;
   let customerPhone=String(user.user_metadata?.phone||profile?.phone||'');try{const {data:phoneRow,error:phoneError}=await db.from('ao_customer_profiles').select('phone').eq('user_id',user.id).maybeSingle();if(!phoneError&&phoneRow?.phone)customerPhone=String(phoneRow.phone);else if(phoneError)console.warn('Using the phone number saved in the verified account metadata because the profile lookup was unavailable:',phoneError.message||phoneError)}catch(phoneErr){console.warn('Using account metadata phone as fallback:',phoneErr?.message||phoneErr)}
-  customerPhone=aoNormalizePhone(customerPhone);if(!customerPhone){toast('Please add a phone number in My Account before placing your order.');const fullName=user.user_metadata?.full_name||user.email?.split('@')[0]||'';$('#aoDashboardName').textContent=fullName;$('#aoDashboardEmail').textContent=user.email||'';$('#aoDashboardAvatar').textContent=(fullName[0]||'A').toUpperCase();const saved=await aoLoadCustomerPhone(user);const display=document.getElementById('aoProfilePhoneDisplay');if(display)display.textContent=saved||'Not added yet';const form=document.getElementById('aoProfilePhoneForm');if(form)form.hidden=false;const openButton=document.getElementById('aoOpenPhoneEditor');if(openButton)openButton.hidden=true;const current=document.getElementById('aoProfileCurrentPhone');if(current)current.value=saved;const currentField=document.getElementById('aoCurrentPhoneField');if(currentField)currentField.hidden=!saved;if(current)current.required=!!saved;openModal('aoAccountDashboard');return}
+  customerPhone=aoNormalizePhone(customerPhone);if(!customerPhone){toast('Please add a phone number in My Account before placing your order.');const fullName=user.user_metadata?.full_name||user.email?.split('@')[0]||'';$('#aoDashboardName').textContent=fullName;$('#aoDashboardEmail').textContent=user.email||'';$('#aoDashboardAvatar').textContent=(fullName[0]||'A').toUpperCase();const saved=await aoLoadCustomerPhone(user);const display=document.getElementById('aoProfilePhoneDisplay');if(display)display.textContent=saved||'Not added yet';const form=document.getElementById('aoProfilePhoneForm');if(form)form.hidden=false;const openButton=document.getElementById('aoOpenPhoneEditor');if(openButton)openButton.hidden=true;const current=document.getElementById('aoProfileCurrentPhone');if(current)current.value=saved;const currentField=document.getElementById('aoCurrentPhoneField');if(currentField)currentField.hidden=!saved;if(current)current.required=!!saved;if(typeof window.aoOpenCheckoutPhoneStep==='function')window.aoOpenCheckoutPhoneStep();else if(typeof window.aoOpenPhoneUpdateDialog==='function')window.aoOpenPhoneUpdateDialog();else openModal('aoAccountDashboard');return}
   const stockIssue=aoCartStockIssue(cart);if(stockIssue){toast(stockIssue.stock===0?stockIssue.product.name+' is out of stock.':'Only '+stockIssue.stock+' unit(s) of '+stockIssue.product.name+' remain. Update your cart and try again.');return}
   const total=cart.reduce((n,i)=>n+(productById(i.id)?.price||0)*i.qty,0);
   // Keep catalogue/database prices in USD; snapshot the selected display currency and checkout-time rate.
@@ -3030,7 +3032,7 @@ $('#checkoutForm').addEventListener('submit',async e=>{
  finally{delete form.dataset.aoSubmitting;if(submit){submit.disabled=false;submit.textContent=submit.dataset.originalText||'Place order';delete submit.dataset.originalText}}
 });
 
-async function aoSaveCustomerPhone(event){event.preventDefault();const db=window.ajaySupabase;let user=window.aoCurrentUser||null;if(!user&&db){try{const authResult=await db.auth.getUser();user=authResult.data?.user||null}catch(_){}}const currentInput=document.getElementById('aoProfileCurrentPhone'),newInput=document.getElementById('aoProfileNewPhone'),confirmInput=document.getElementById('aoProfileConfirmPhone'),button=document.getElementById('aoProfilePhoneSave'),status=document.getElementById('aoProfilePhoneStatus');if(!db||!user?.id){if(status){status.textContent='Please sign in again before updating your phone number.';status.dataset.kind='error'}return}const currentPhone=aoNormalizePhone(currentInput?.value),newPhone=aoNormalizePhone(newInput?.value),confirmPhone=aoNormalizePhone(confirmInput?.value);const savedPhone=aoNormalizePhone(await aoLoadCustomerPhone(user));if(savedPhone&&(!currentPhone||currentPhone!==savedPhone)){if(status){status.textContent='The current phone number does not match the number saved on your account.';status.dataset.kind='error'}currentInput?.focus();return}if(!newPhone){if(status){status.textContent='Enter a valid new phone number with +country code.';status.dataset.kind='error'}newInput?.focus();return}if(newPhone!==confirmPhone){if(status){status.textContent='The new phone numbers do not match. Please confirm the number again.';status.dataset.kind='error'}confirmInput?.focus();return}if(newPhone===savedPhone){if(status){status.textContent='This is already your current phone number.';status.dataset.kind='error'}newInput?.focus();return}button.disabled=true;button.textContent='Updating…';if(status){status.textContent='';status.removeAttribute('data-kind')}try{const {error:profileError}=await db.from('ao_customer_profiles').upsert({user_id:user.id,phone:newPhone,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(profileError)throw profileError;const {data:authData,error:authError}=await db.auth.updateUser({data:{...(user.user_metadata||{}),phone:newPhone}});if(authError)throw authError;const updatedUser=authData?.user||{...user,user_metadata:{...(user.user_metadata||{}),phone:newPhone}};window.aoCurrentUser=updatedUser;profile={...(profile||{}),phone:newPhone};const display=document.getElementById('aoProfilePhoneDisplay');if(display)display.textContent=newPhone;const form=document.getElementById('aoProfilePhoneForm');if(form){form.reset();form.hidden=true}window.aoClosePhoneUpdateDialog?.();const openButton=document.getElementById('aoOpenPhoneEditor');if(openButton)openButton.hidden=false;const currentDisplay=document.getElementById('aoProfileCurrentPhone');if(currentDisplay)currentDisplay.value=newPhone;const feedback=document.getElementById('aoProfilePhoneFeedback');if(feedback)feedback.textContent='Phone number updated successfully.';if(typeof toast==='function')toast('Phone number updated successfully.');}catch(err){console.error('Customer phone update failed:',err);if(status){status.textContent=err?.message||'We could not update your phone number. Please try again.';status.dataset.kind='error'}}finally{button.disabled=false;button.textContent='Update phone number ↗︎'}}
+async function aoSaveCustomerPhone(event){event.preventDefault();const db=window.ajaySupabase;let user=window.aoCurrentUser||null;if(!user&&db){try{const authResult=await db.auth.getUser();user=authResult.data?.user||null}catch(_){}}const currentInput=document.getElementById('aoProfileCurrentPhone'),newInput=document.getElementById('aoProfileNewPhone'),confirmInput=document.getElementById('aoProfileConfirmPhone'),button=document.getElementById('aoProfilePhoneSave'),status=document.getElementById('aoProfilePhoneStatus');if(!db||!user?.id){if(status){status.textContent='Please sign in again before updating your phone number.';status.dataset.kind='error'}return}const currentPhone=aoNormalizePhone(currentInput?.value),newPhone=aoNormalizePhone(newInput?.value),confirmPhone=aoNormalizePhone(confirmInput?.value);const savedPhone=aoNormalizePhone(await aoLoadCustomerPhone(user));if(savedPhone&&(!currentPhone||currentPhone!==savedPhone)){if(status){status.textContent='The current phone number does not match the number saved on your account.';status.dataset.kind='error'}currentInput?.focus();return}if(!newPhone){if(status){status.textContent='Enter a valid new phone number with +country code.';status.dataset.kind='error'}newInput?.focus();return}if(newPhone!==confirmPhone){if(status){status.textContent='The new phone numbers do not match. Please confirm the number again.';status.dataset.kind='error'}confirmInput?.focus();return}if(newPhone===savedPhone){if(status){status.textContent='This is already your current phone number.';status.dataset.kind='error'}newInput?.focus();return}button.disabled=true;button.textContent='Updating…';if(status){status.textContent='';status.removeAttribute('data-kind')}try{const {error:profileError}=await db.from('ao_customer_profiles').upsert({user_id:user.id,phone:newPhone,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(profileError)throw profileError;const {data:authData,error:authError}=await db.auth.updateUser({data:{...(user.user_metadata||{}),phone:newPhone}});if(authError)throw authError;const updatedUser=authData?.user||{...user,user_metadata:{...(user.user_metadata||{}),phone:newPhone}};window.aoCurrentUser=updatedUser;profile={...(profile||{}),phone:newPhone};const display=document.getElementById('aoProfilePhoneDisplay');if(display)display.textContent=newPhone;const form=document.getElementById('aoProfilePhoneForm');if(form){form.reset();form.hidden=true}window.aoClosePhoneUpdateDialog?.();window.aoCloseCheckoutPhoneStep?.();const openButton=document.getElementById('aoOpenPhoneEditor');if(openButton)openButton.hidden=false;const currentDisplay=document.getElementById('aoProfileCurrentPhone');if(currentDisplay)currentDisplay.value=newPhone;const feedback=document.getElementById('aoProfilePhoneFeedback');if(feedback)feedback.textContent='Phone number updated successfully.';if(typeof toast==='function')toast('Phone number updated successfully.');}catch(err){console.error('Customer phone update failed:',err);if(status){status.textContent=err?.message||'We could not update your phone number. Please try again.';status.dataset.kind='error'}}finally{button.disabled=false;button.textContent='Update phone number ↗︎'}}
 
 const aoPhoneDialogStyle=document.createElement('style');aoPhoneDialogStyle.id='ao-phone-update-dialog-style';aoPhoneDialogStyle.textContent=`
 #aoPhoneUpdatePanel{position:fixed;inset:0;z-index:100600;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(10,12,16,.62);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
@@ -3109,12 +3111,47 @@ document.getElementById('aoProfilePhoneForm')?.addEventListener('submit',aoSaveC
     if(current)current.required=!!saved;
    }).catch(err=>console.warn('Phone editor profile refresh failed:',err?.message||err));
   }
-  openButton.addEventListener('click',openDialog);
+  window.aoOpenPhoneUpdateDialog=openDialog;openButton.addEventListener('click',openDialog);
   closeButton.addEventListener('click',()=>closeDialog(true));
   document.getElementById('aoCancelPhoneEdit')?.addEventListener('click',()=>closeDialog(true));
   panel.addEventListener('click',e=>{if(e.target===panel)closeDialog(true)});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!panel.hidden)closeDialog(true)});
  })();
+// Checkout phone step: place the existing account phone form ABOVE delivery fields.
+(()=>{
+ const checkout=document.getElementById('checkoutForm');
+ const form=document.getElementById('aoProfilePhoneForm');
+ if(!checkout||!form||checkout.dataset.aoPhoneStepReady==='1')return;
+ checkout.dataset.aoPhoneStepReady='1';
+ const step=document.createElement('section');step.id='aoCheckoutPhoneStep';step.hidden=true;
+ step.className='ao-checkout-phone-step';
+ step.innerHTML='<div class="ao-checkout-phone-heading"><span class="eyebrow">ONE QUICK STEP</span><h3>Add your phone number</h3><p>Add a reachable number for order updates and delivery coordination. Once saved, continue with the checkout details below.</p></div><div class="ao-checkout-phone-form"></div>';
+ const first=checkout.querySelector('.formgrid');
+ if(first)checkout.insertBefore(step,first);else checkout.prepend(step);
+ step.querySelector('.ao-checkout-phone-form').appendChild(form);
+ const style=document.createElement('style');style.id='ao-checkout-phone-step-style';
+ style.textContent='#aoCheckoutPhoneStep{margin:0 0 20px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink)}#aoCheckoutPhoneStep[hidden]{display:none!important}#aoCheckoutPhoneStep .ao-checkout-phone-heading{margin:0 0 14px}#aoCheckoutPhoneStep .ao-checkout-phone-heading h3{margin:5px 0;font-size:clamp(18px,3vw,22px);letter-spacing:-.025em;color:var(--ink)}#aoCheckoutPhoneStep .ao-checkout-phone-heading p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}#aoCheckoutPhoneStep #aoProfilePhoneForm{display:grid;gap:11px;margin:0}#aoCheckoutPhoneStep #aoProfilePhoneForm .field{display:grid;gap:6px;margin:0}#aoCheckoutPhoneStep #aoProfilePhoneForm label{font-size:11px;color:var(--muted);font-weight:700}#aoCheckoutPhoneStep #aoProfilePhoneForm input{width:100%;min-width:0;min-height:44px;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:var(--bg);color:var(--ink);font:inherit;font-size:14px}#aoCheckoutPhoneStep #aoProfilePhoneForm>small{font-size:11px;line-height:1.5;color:var(--muted)!important}#aoCheckoutPhoneStep #aoProfilePhoneForm .btn{width:100%;min-height:44px;border-radius:10px}#aoCheckoutPhoneStep #aoCancelPhoneEdit{display:none!important}@media(max-width:600px){#aoCheckoutPhoneStep{padding:13px;margin-bottom:16px;border-radius:12px}}';
+ document.head.appendChild(style);
+ window.aoOpenCheckoutPhoneStep=()=>{
+  const user=window.aoCurrentUser||((typeof activeUser==='function')?activeUser():null);
+  const current=document.getElementById('aoProfileCurrentPhone');
+  const currentField=document.getElementById('aoCurrentPhoneField');
+  const openButton=document.getElementById('aoOpenPhoneEditor');
+  const status=document.getElementById('aoProfilePhoneStatus');
+  const feedback=document.getElementById('aoProfilePhoneFeedback');
+  if(status){status.textContent='';status.removeAttribute('data-kind')}
+  if(feedback)feedback.textContent='';
+  const saved=String(profile?.phone||user?.user_metadata?.phone||'');
+  if(current)current.value=saved;
+  if(currentField)currentField.hidden=!saved;
+  if(current)current.required=!!saved;
+  form.hidden=false;step.hidden=false;
+  if(openButton)openButton.hidden=true;
+  step.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+  requestAnimationFrame(()=>document.getElementById('aoProfileNewPhone')?.focus({preventScroll:true}));
+ };
+ window.aoCloseCheckoutPhoneStep=()=>{step.hidden=true};
+})();
 async function aoOpenAccountDashboard(){
  const current=window.aoCurrentUser||((typeof activeUser==='function')?activeUser():null);
  const knownEmail=profile?.email||current?.email||'';
@@ -6845,6 +6882,18 @@ img{height:auto}
   pointer-events: none !important;
 }
 </style>
+
+<style id="ao-v137-rendering-performance-pass">
+/* Low-risk rendering optimization: defer off-screen product-card rendering without changing data or interactions. */
+#products>.product,#recentProducts>.product{content-visibility:auto;contain-intrinsic-size:auto 470px}
+@media(max-width:760px){#products>.product,#recentProducts>.product{contain-intrinsic-size:auto 350px}}
+@media(max-width:480px){#products>.product,#recentProducts>.product{contain-intrinsic-size:auto 315px}}
+/* Avoid hover zoom/compositing work on touch-only devices; retain the desktop hover treatment. */
+@media(hover:none),(pointer:coarse){.product:hover .product-image img{transform:none!important;transition:none!important}}
+/* Keep image decoding and painting from competing with the first visible content. */
+#products .product-image img,#recentProducts .product-image img{backface-visibility:hidden}
+@media(prefers-reduced-motion:reduce){#products .product-image img,#recentProducts .product-image img{transition:none!important}}
+</style>
 </body>
 <!-- AjayOutfits VERSION 95: admin can permanently delete approved or rejected reviews; existing theme tokens and typography retained. -->
 </html>
@@ -7212,4 +7261,58 @@ html[data-theme="dark"] .ao-seller-review-card{background:var(--panel);color:var
 /* Keep heading/tagline copy clean: remove the decorative leading dash before text. */
 .hero-slogan::before{content:none!important;display:none!important;width:0!important;flex:0 0 0!important}
 .hero-slogan{gap:0!important}
+</style>
+
+<style id="ao-mobile-header-icons-refined-v2">
+/* Mobile-only header refinement: retain the existing artwork, colors and actions. */
+@media (max-width:760px){
+  .header .actions{gap:4px!important;align-items:center!important;flex-wrap:nowrap!important}
+  .header .actions>.iconbtn,
+  #aoAccountActions .ao-account-action,
+  .header .actions>.ao-header-logout{
+    box-sizing:border-box!important;
+    width:28px!important;min-width:28px!important;
+    height:28px!important;min-height:28px!important;
+    flex:0 0 28px!important;padding:0!important;
+    display:inline-flex!important;align-items:center!important;justify-content:center!important;
+  }
+  .header .actions>.iconbtn>svg,
+  #aoAccountActions .ao-account-action>.ao-ui-icon,
+  .header .actions>.ao-header-logout>svg{
+    width:14px!important;height:14px!important;
+    max-width:14px!important;max-height:14px!important;
+  }
+  #aoAccountActions{gap:4px!important;align-items:center!important}
+}
+@media (max-width:390px){
+  .header .actions{gap:3px!important}
+  .header .actions>.iconbtn,
+  #aoAccountActions .ao-account-action,
+  .header .actions>.ao-header-logout{
+    width:26px!important;min-width:26px!important;
+    height:26px!important;min-height:26px!important;
+    flex-basis:26px!important;
+  }
+  .header .actions>.iconbtn>svg,
+  #aoAccountActions .ao-account-action>.ao-ui-icon,
+  .header .actions>.ao-header-logout>svg{
+    width:13px!important;height:13px!important;
+    max-width:13px!important;max-height:13px!important;
+  }
+}
+</style>
+
+<style id="ao-performance-checkout-responsive-fix">
+/* Preserve the shopper's catalogue position while overlays and small DOM updates complete. */
+/* Compact payment choices on narrow screens without clipping labels or icons. */
+@media(max-width:480px){
+ #checkoutForm .payment-preferences{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;align-items:stretch!important;overflow:visible!important}
+ #checkoutForm .ao-payment-option{box-sizing:border-box!important;min-width:0!important;min-height:58px!important;padding:7px 3px!important;gap:4px!important;flex-direction:column!important;justify-content:center!important;align-items:center!important;white-space:normal!important}
+ #checkoutForm .ao-payment-option input{width:11px!important;height:11px!important;flex:0 0 11px!important;margin:0!important}
+ #checkoutForm .ao-payment-icon{width:14px!important;height:14px!important;flex:0 0 14px!important;max-width:14px!important}
+ #checkoutForm .ao-payment-option span{display:block!important;width:100%!important;min-width:0!important;max-width:100%!important;white-space:normal!important;text-align:center!important;font-size:9px!important;line-height:1.2!important;overflow-wrap:anywhere!important}
+ #checkoutForm .ao-payment-option b{display:block!important;white-space:normal!important;font-size:9px!important;line-height:1.2!important;overflow-wrap:anywhere!important}
+}
+@media(max-width:350px){#checkoutForm .ao-payment-option{padding:6px 1px!important;gap:3px!important}#checkoutForm .ao-payment-option span,#checkoutForm .ao-payment-option b{font-size:8.5px!important}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}}
 </style>
