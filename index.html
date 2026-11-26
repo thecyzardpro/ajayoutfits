@@ -2239,7 +2239,8 @@ const seedProducts=[
 ];
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const read=(key,fallback)=>{try{const v=stateStore.getItem('ao_'+key);return v?JSON.parse(v):fallback}catch{return fallback}};
-try{if(!stateStore.getItem('ao_products'))document.documentElement.classList.add('ao-no-local-catalogue')}catch(_){}
+// Always keep cached/seed product cards hidden until the authoritative Supabase catalogue has loaded successfully.
+document.documentElement.classList.add('ao-no-local-catalogue');
 const write=(key,val)=>stateStore.setItem('ao_'+key,JSON.stringify(val));
 let products=read('products',seedProducts),cart=read('cart',[]),wishlist=read('wishlist',[]),profile=read('profile',null),orders=read('orders',[]),sellers=read('sellers',[]),recentlyViewed=read('recentlyViewed',[]),category='All',query='',sort='featured',detailId=null,detailSize='';
 products=[...seedProducts.map(p=>{const saved=products.find(x=>String(x.id)===String(p.id));const item=saved||p;return {...item,seller:'Ajay Outfits',sellerShopName:'Ajay Outfits',sellerUserId:null,stock:(item.stock===undefined||item.stock===null||item.stock==='')?0:item.stock}}),...products.filter(p=>!seedProducts.some(seed=>String(seed.id)===String(p.id))).map(p=>({...p,stock:(p.stock===undefined||p.stock===null||p.stock==='')?0:p.stock}))];
