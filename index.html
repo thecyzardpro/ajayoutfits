@@ -2511,7 +2511,7 @@ async function aoHydrateAjayDataFromSupabaseOnce(){
  let productApplied=false;
  const applyProductResult=pr=>{
   if(productApplied)return;productApplied=true;
-  if(pr?.error){aoProductsCloudReadable=false;console.error('[Products] Cloud catalogue could not be loaded; stale local/demo products remain hidden:',pr.error.message);document.documentElement.classList.remove('ao-cloud-hydrating');document.documentElement.dataset.aoStorefrontHydrated='error';try{document.dispatchEvent(new Event('ao:storefront-hydrated'))}catch(_){}return;}
+  if(pr?.error){aoProductsCloudReadable=false;console.warn('[Products] Cloud catalogue could not be loaded; keeping the last locally available catalogue:',pr.error.message);document.documentElement.classList.remove('ao-cloud-hydrating','ao-no-local-catalogue');document.documentElement.dataset.aoStorefrontHydrated='true';try{document.dispatchEvent(new Event('ao:storefront-hydrated'))}catch(_){}return;}
   aoProductsCloudReadable=true;
   const rows=pr?.data||[];
   // The dedicated homepage settings request owns the authoritative image state.
@@ -2534,7 +2534,7 @@ async function aoHydrateAjayDataFromSupabaseOnce(){
   try{document.dispatchEvent(new Event('ao:storefront-hydrated'))}catch(_){}
  };
  // Product data is applied as soon as its request completes; it does not block startup.
- productRequest.then(applyProductResult).catch(err=>{console.error('[Products] Cloud catalogue request failed; stale local/demo products remain hidden:',err);document.documentElement.classList.remove('ao-cloud-hydrating');document.documentElement.dataset.aoStorefrontHydrated='error';try{document.dispatchEvent(new Event('ao:storefront-hydrated'))}catch(_){}});
+ productRequest.then(applyProductResult).catch(err=>{console.warn('[Products] Cloud catalogue request failed; keeping the last locally available catalogue:',err);document.documentElement.classList.remove('ao-cloud-hydrating','ao-no-local-catalogue');document.documentElement.dataset.aoStorefrontHydrated='true';try{document.dispatchEvent(new Event('ao:storefront-hydrated'))}catch(_){}});
  // Orders and seller data hydrate independently and cannot hold up the storefront.
  void Promise.all([orderRequest,sellerRequest]).then(([or,sr])=>{
   if(or.skipped){/* Guest storefront: wait for sign-in before private order reads. */}
