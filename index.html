@@ -1,18 +1,36 @@
 <!doctype html>
-<html lang="en" class="ao-cloud-hydrating">
+<html lang="en" class="ao-cloud-hydrating ao-admin-images-pending">
 <head>
+<script id="ao-role-fast-cache-bootstrap">
+(()=>{
+ const cacheKey=id=>'ao_role_cache_v1_'+String(id||'');
+ const readCachedRole=id=>{try{const r=localStorage.getItem(cacheKey(id));return ['customer','seller','admin'].includes(r)?r:''}catch(_){return ''}};
+ const apply=(id)=>{const role=readCachedRole(id);const root=document.documentElement;root.dataset.aoRoleFast=role||'unknown';root.dataset.aoRoleFastUser=String(id||'');};
+ try{
+  let userId='';
+  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(!k||!k.endsWith('-auth-token'))continue;try{const v=JSON.parse(localStorage.getItem(k)||'null');const u=v?.user||v?.currentSession?.user||v?.session?.user;if(u?.id){userId=String(u.id);break}}catch(_){}}
+  apply(userId);
+ }catch(_){apply('')}
+ window.addEventListener('ao:auth-change',e=>{const id=String(e?.detail?.user?.id||'');apply(id)});
+ window.addEventListener('ao:role-reset',()=>apply(''));
+ window.__aoSetRoleFastCache=(id,role)=>{try{if(id&&['customer','seller','admin'].includes(role))localStorage.setItem(cacheKey(id),role)}catch(_){}apply(id)};
+})();
+</script>
 <link rel="preconnect" href="https://dffhwmlojjosgspzwtzj.supabase.co" crossorigin>
 <link rel="dns-prefetch" href="//dffhwmlojjosgspzwtzj.supabase.co">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://unpkg.com" crossorigin>
 <link rel="preconnect" href="https://images.unsplash.com" crossorigin>
 <style id="ao-cloud-image-hydration-guard">
-/* Keep default/seed photos from flashing before the saved Admin catalogue and homepage image settings hydrate. */
-/* Product photos use the local last-known catalogue immediately; only cloud-managed homepage art waits for its saved setting. */
-html.ao-cloud-hydrating .hero-art>img{visibility:hidden!important;opacity:0!important}
+/* Never expose seed/demo imagery while the last Admin-published catalogue and homepage
+   settings are still being resolved. A real local cache remains visible immediately. */
+html.ao-admin-images-pending .hero-art>img{visibility:hidden!important;opacity:0!important}
+html.ao-no-local-catalogue #products .product,
+html.ao-no-local-catalogue #recentProducts .product{visibility:hidden!important}
 html.ao-no-local-catalogue #products .product-image>img,
 html.ao-no-local-catalogue #recentProducts .product-image>img{visibility:hidden!important;opacity:0!important}
 .product-image.ao-image-unavailable{background:var(--soft)}
+.product-image img{content-visibility:auto}
 </style>
 <link rel="preconnect" href="https://images.unsplash.com" crossorigin>
 <link rel="dns-prefetch" href="//unpkg.com">
@@ -1311,12 +1329,11 @@ html[data-theme="dark"] #aoReceiptModal #aoReceiptContent .ao-receipt-qr,
 
 
 <style id="ao-role-aware-header-chrome">
-/* Keep header action slots visible immediately; role-specific labels and visibility update on auth changes. */
-/* Do not expose customer shopping controls while the signed-in account role is unresolved. */
-html:not(.ao-role-chrome-ready) .actions #cartBtn,
-html:not(.ao-role-chrome-ready) .actions #wishBtn,
-html.ao-role-chrome-transition .actions #cartBtn,
-html.ao-role-chrome-transition .actions #wishBtn{visibility:hidden!important;}
+/* Use the last verified role immediately on repeat visits; only unknown/new accounts wait for verification. */
+html:not([data-ao-role-ready="true"]):not([data-ao-role-fast="customer"]) .header .actions #cartBtn,
+html:not([data-ao-role-ready="true"]):not([data-ao-role-fast="customer"]) .header .actions #wishBtn,
+html.ao-role-chrome-transition:not([data-ao-role-fast="customer"]) .header .actions #cartBtn,
+html.ao-role-chrome-transition:not([data-ao-role-fast="customer"]) .header .actions #wishBtn{visibility:hidden!important;pointer-events:none!important;}
 #aoAccountActions[hidden]{display:none!important;}
 </style>
 
@@ -1769,7 +1786,7 @@ a.ao-account-shortcut:hover{border-color:var(--line);background:var(--panel)}
 #aoFooterAppDownload .ao-app-download-link:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}
 
 </style>
-<style id="ao-role-navigation-no-flash">html:not([data-ao-role-ready="true"]) #cartBtn,html:not([data-ao-role-ready="true"]) #wishBtn{visibility:hidden!important;pointer-events:none!important}</style>
+<style id="ao-role-navigation-no-flash">html:not([data-ao-role-ready="true"]):not([data-ao-role-fast="customer"]) #cartBtn,html:not([data-ao-role-ready="true"]):not([data-ao-role-fast="customer"]) #wishBtn{visibility:hidden!important;pointer-events:none!important}</style>
 
 <style id="ao-header-one-line-role-aware-corrected">
 /* Header-only correction: keep navigation and role actions compact and on one row. */
@@ -1853,6 +1870,102 @@ a.ao-account-shortcut:hover{border-color:var(--line);background:var(--panel)}
 </style><style id="ao-product-batch-see-more-v1">
 .ao-product-pagination{display:flex;justify-content:center;margin:clamp(22px,4vw,38px) auto 8px;padding:0 12px}.ao-product-more{position:relative;display:flex;flex-direction:column;align-items:center;gap:13px;width:min(100%,460px);padding:14px 10px 12px;color:var(--ink);text-align:center;text-decoration:none;background:transparent;border:0;cursor:pointer;transition:opacity .2s ease,transform .2s ease}.ao-product-more:hover{opacity:.72;transform:translateY(-2px)}.ao-product-more-copy{display:flex;flex-direction:column;align-items:center;gap:5px}.ao-product-more-kicker{font-size:9px;font-weight:750;letter-spacing:.19em;color:var(--muted)}.ao-product-more strong{font:inherit;font-size:clamp(16px,2.2vw,20px);font-weight:650;letter-spacing:-.025em;color:var(--ink)}.ao-product-more strong span{display:inline-block;margin-left:5px;transition:transform .2s ease}.ao-product-more:hover strong span{transform:translate(3px,-3px)}.ao-product-more small{font:inherit;font-size:10px;line-height:1.5;color:var(--muted)}.ao-product-more-progress{display:block;width:min(100%,220px);height:2px;overflow:hidden;background:var(--line);border-radius:2px}.ao-product-more-progress span{display:block;height:100%;background:var(--ink);transition:width .25s ease}.ao-product-more:focus-visible{outline:2px solid var(--accent);outline-offset:4px}.ao-product-pagination[hidden]{display:none!important}@media(prefers-reduced-motion:reduce){.ao-product-more,.ao-product-more strong span,.ao-product-more-progress span{transition:none}}
 </style>
+
+<style id="ao-iphone-compact-header-fix">
+/* Compact iPhone header controls: keep navigation icons visually separate from the brand. */
+@media (max-width: 620px) {
+  .header .nav { gap: 7px !important; min-height: 56px !important; padding-top: 6px !important; padding-bottom: 6px !important; }
+  .header .logo-brand { gap: 5px !important; min-width: 0; }
+  .header .logo-brand img { width: 36px !important; height: 36px !important; flex: 0 0 36px !important; }
+  .header .logo-brand span { font-size: 12px !important; line-height: 1.05 !important; max-width: 86px; }
+  .header .mobile-menu { width: 30px !important; height: 30px !important; min-width: 30px !important; min-height: 30px !important; padding: 0 !important; font-size: 15px !important; border-radius: 50%; }
+  .header .mobile-menu .ao-ui-icon { width: 16px !important; height: 16px !important; }
+  .header .actions { gap: 4px !important; margin-left: auto !important; align-items: center !important; }
+  .header .actions .iconbtn { width: 29px !important; height: 29px !important; min-width: 29px !important; min-height: 29px !important; flex: 0 0 29px !important; padding: 0 !important; }
+  .header .actions .iconbtn .ao-ui-icon,
+  .header .actions .iconbtn > svg { width: 15px !important; height: 15px !important; }
+  .header .actions .iconbtn.theme-switch { width: 29px !important; height: 29px !important; flex-basis: 29px !important; }
+  .header .actions .count { min-width: 13px !important; height: 13px !important; font-size: 8px !important; right: -3px !important; top: -3px !important; }
+}
+@media (max-width: 390px) {
+  .header .nav { gap: 5px !important; }
+  .header .logo-brand img { width: 33px !important; height: 33px !important; flex-basis: 33px !important; }
+  .header .logo-brand span { font-size: 11px !important; max-width: 76px; }
+  .header .mobile-menu { width: 28px !important; height: 28px !important; min-width: 28px !important; min-height: 28px !important; }
+  .header .actions { gap: 3px !important; }
+  .header .actions .iconbtn, .header .actions .iconbtn.theme-switch { width: 27px !important; height: 27px !important; min-width: 27px !important; min-height: 27px !important; flex-basis: 27px !important; }
+}
+</style>
+
+<style id="ao-clean-header-icons-v1">
+/* Clean icon-only header controls: remove square button frames, keep the icons and actions. */
+.header .actions>.iconbtn,
+#aoAccountActions .ao-account-action,
+.header .actions>.ao-header-logout,
+.header .mobile-menu{
+  background:transparent!important;
+  border:0!important;
+  outline-offset:3px!important;
+  box-shadow:none!important;
+  border-radius:0!important;
+}
+.header .actions>.iconbtn:hover,
+.header .actions>.iconbtn:active,
+#aoAccountActions .ao-account-action:hover,
+#aoAccountActions .ao-account-action:active,
+.header .actions>.ao-header-logout:hover,
+.header .actions>.ao-header-logout:active,
+.header .mobile-menu:hover,
+.header .mobile-menu:active{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+.header .actions>.iconbtn:focus-visible,
+#aoAccountActions .ao-account-action:focus-visible,
+.header .actions>.ao-header-logout:focus-visible,
+.header .mobile-menu:focus-visible{
+  outline:2px solid var(--ao-focus,var(--ink))!important;
+  outline-offset:3px!important;
+}
+</style>
+<!-- Role-gated header controls: remain hidden until the signed-in account role is confirmed. -->
+
+<style id="ao-header-menu-placement-final-v1">
+/* Final header-only correction: retain the existing right-side menu placement and responsive visibility. */
+@media (max-width:1360px){
+  .header .nav{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;min-width:0!important;column-gap:clamp(2px,.65vw,6px)!important;row-gap:0!important}
+  .header .logo-brand{order:0!important;flex:0 1 auto!important;min-width:max-content!important;max-width:none!important}
+  .header .actions{order:1!important;display:flex!important;flex:0 1 auto!important;min-width:0!important;width:auto!important;margin-left:auto!important;gap:clamp(2px,.45vw,4px)!important;align-items:center!important;justify-content:flex-end!important;flex-wrap:nowrap!important;white-space:nowrap!important}
+  .header .mobile-menu{order:2!important;display:grid!important;place-items:center!important;flex:0 0 27px!important;width:27px!important;min-width:27px!important;height:27px!important;min-height:27px!important;margin:0 0 0 2px!important;padding:0!important;border:0!important;border-radius:50%!important;background:transparent!important;box-shadow:none!important;color:var(--ink)!important;line-height:1!important}
+  .header .mobile-menu .ao-ui-icon{display:block!important;width:16px!important;height:16px!important;max-width:16px!important;max-height:16px!important;fill:none!important;stroke:currentColor!important}
+  .header .actions>.iconbtn,#aoAccountActions .ao-account-action,.header .actions>.ao-header-logout{box-sizing:border-box!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 26px!important;width:26px!important;min-width:26px!important;height:26px!important;min-height:26px!important;padding:0!important;border:0!important;border-radius:50%!important;background:transparent!important;box-shadow:none!important;color:var(--ink)!important}
+  .header .actions>.iconbtn>svg,#aoAccountActions .ao-account-action>.ao-ui-icon,.header .actions>.ao-header-logout>svg{display:block!important;width:15px!important;height:15px!important;max-width:15px!important;max-height:15px!important;flex:0 0 15px!important}
+  #aoAccountActions{display:inline-flex!important;flex:0 0 auto!important;align-items:center!important;gap:2px!important;white-space:nowrap!important}
+  #aoAccountActions[hidden]{display:none!important}
+  .header .actions #cartBtn,.header .actions #wishBtn{position:relative!important}
+  .header .mobile-menu:hover,.header .mobile-menu:active,.header .actions>.iconbtn:hover,#aoAccountActions .ao-account-action:hover{background:transparent!important;border:0!important;box-shadow:none!important;opacity:.72}
+  .header .mobile-menu:focus-visible,.header .actions>.iconbtn:focus-visible,#aoAccountActions .ao-account-action:focus-visible{outline:2px solid var(--accent)!important;outline-offset:2px!important}
+}
+@media (max-width:390px){
+  .header .nav{column-gap:2px!important}
+  .header .mobile-menu{flex-basis:24px!important;width:24px!important;min-width:24px!important;height:24px!important;min-height:24px!important;margin-left:1px!important}
+  .header .mobile-menu .ao-ui-icon{width:14px!important;height:14px!important;max-width:14px!important;max-height:14px!important}
+  .header .actions{gap:1px!important}
+  .header .actions>.iconbtn,#aoAccountActions .ao-account-action,.header .actions>.ao-header-logout{flex-basis:23px!important;width:23px!important;min-width:23px!important;height:23px!important;min-height:23px!important}
+  .header .actions>.iconbtn>svg,#aoAccountActions .ao-account-action>.ao-ui-icon,.header .actions>.ao-header-logout>svg{width:13px!important;height:13px!important;max-width:13px!important;max-height:13px!important;flex-basis:13px!important}
+}
+@media (max-width:360px){
+  .header .nav{column-gap:1px!important}
+  .header .mobile-menu{flex-basis:22px!important;width:22px!important;min-width:22px!important;height:22px!important;min-height:22px!important}
+  .header .mobile-menu .ao-ui-icon{width:13px!important;height:13px!important;max-width:13px!important;max-height:13px!important}
+  .header .actions{gap:0!important}
+  .header .actions>.iconbtn,#aoAccountActions .ao-account-action,.header .actions>.ao-header-logout{flex-basis:21px!important;width:21px!important;min-width:21px!important;height:21px!important;min-height:21px!important}
+  .header .actions>.iconbtn>svg,#aoAccountActions .ao-account-action>.ao-ui-icon,.header .actions>.ao-header-logout>svg{width:12px!important;height:12px!important;max-width:12px!important;max-height:12px!important;flex-basis:12px!important}
+}
+@media (min-width:1361px){.header .mobile-menu{display:none!important}}
+</style>
+
 </head>
 <body id="top"><div id="ao-splash" class="ao-splash" role="status" aria-live="polite"
      aria-label="Ajay Outfits is preparing your shopping experience" aria-busy="true">
@@ -1875,7 +1988,7 @@ a.ao-account-shortcut:hover{border-color:var(--line);background:var(--panel)}
 <div class="actions"><button class="iconbtn theme-switch" id="themeBtn" aria-label="Theme: System default" title="Theme: System default · click to change" aria-pressed="false"><svg class="theme-glyph" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg></button><button type="button" class="iconbtn" id="accountBtn" aria-label="Account" title="Account"><svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c.5-3.5 3.2-5.4 7-5.4s6.5 1.9 7 5.4"/></svg></button><button class="iconbtn" id="wishBtn" aria-label="Wishlist" title="Wishlist"><svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.8 4.8a5.4 5.4 0 0 0-7.6 0L12 6l-1.2-1.2a5.4 5.4 0 0 0-7.6 7.6l1.2 1.2L12 21l7.6-7.4 1.2-1.2a5.4 5.4 0 0 0 0-7.6Z"/></svg><span class="count" id="wishCount">0</span></button><button class="iconbtn" id="cartBtn" aria-label="Shopping cart" title="Shopping cart"><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M2 3h2l2.6 12.2a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6L22 7H5"/></svg><span class="count" id="cartCount">0</span></button><span id="aoAccountActions" hidden><button type="button" id="aoTopOrders" class="ao-account-action" aria-label="My Orders" title="My Orders"><svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 3.5h9l3 3V21H6z"/><path d="M15 3.5V7h3M9 11h6M9 14.5h6M9 18h4"/></svg></button><button type="button" id="aoTopSignOut" class="ao-account-action" aria-label="Sign out" title="Sign out"><svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg></button></span></div>
 </div><div class="wrap search-row"><div class="search search-live"><span class="search-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 4.2 4.2"></path></svg></span><input id="search" type="search" placeholder="Search sneakers, brands, apparel..." aria-label="Search products" aria-autocomplete="list" aria-controls="searchSuggestions" aria-expanded="false" autocomplete="off"><button class="search-clear" id="searchClear" type="button" aria-label="Clear search" hidden>×</button><button class="search-submit" id="searchSubmit" type="button" aria-label="Search products">Search</button><div class="search-suggestions" id="searchSuggestions" role="listbox" aria-label="Search suggestions"></div></div></div></header>
 <main class="wrap">
-<section class="hero"><div class="hero-copy"><span class="eyebrow hero-slogan">The Home for the Stylish You</span><h1>Wear what<br>moves you.</h1><p>Shop sought-after sneakers, premium streetwear and everyday essentials selected to elevate your look.</p><a class="btn" href="#shop">Shop the collection <span>↗︎</span></a></div><div class="hero-art"><img src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1000&q=85" alt="Statement red sneaker" decoding="async" fetchpriority="high" onerror="this.style.display='none'"><span class="hero-tag">YOUR NEXT FAVOURITE STARTS HERE</span></div></section>
+<section class="hero"><div class="hero-copy"><span class="eyebrow hero-slogan">The Home for the Stylish You</span><h1>Wear what<br>moves you.</h1><p>Shop sought-after sneakers, premium streetwear and everyday essentials selected to elevate your look.</p><a class="btn" href="#shop">Shop the collection <span>↗︎</span></a></div><div class="hero-art"><img src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1000&q=85" alt="Statement red sneaker" loading="eager" decoding="async" fetchpriority="high" onerror="this.style.display='none'"><span class="hero-tag">YOUR NEXT FAVOURITE STARTS HERE</span></div></section>
 <div class="ticker"><span>Handpicked for your style</span><span>Fresh drops & new arrivals</span><span>Discover standout labels</span><span>Your style, your rules</span></div>
 
 <section class="market-section" id="featuredBrands"><div class="sectionhead"><div><span class="eyebrow">Labels to know</span><h2>Shop the brands.</h2></div><p>Explore names shaping everyday style.</p></div><div class="brand-rail" aria-label="Featured brands"><button class="brand-pill" data-brand-search="NIKE">Nike</button><button class="brand-pill" data-brand-search="JORDAN">Jordan</button><button class="brand-pill" data-brand-search="ADIDAS">adidas</button><button class="brand-pill" data-brand-search="NEW BALANCE">New Balance</button><button class="brand-pill" data-brand-search="AO STUDIO">AO Studio</button><button class="brand-pill" data-brand-search="STREET FORM">Street Form</button><button class="brand-pill" data-brand-search="CULTURE ARCHIVE">Culture Archive</button></div></section>
@@ -1900,7 +2013,17 @@ a.ao-account-shortcut:hover{border-color:var(--line);background:var(--panel)}
 <div class="modal" id="accountModal"><div class="modalbox ao-auth-box" style="max-width:500px"><div class="drawer-head"><div><span class="eyebrow">YOUR AJAY OUTFITS ACCOUNT</span><h2 id="authHeading">Welcome back.</h2></div><button class="close" data-close="accountModal" aria-label="Close account">×</button></div><p class="ao-auth-intro" id="authIntro">Sign in to access your account and enjoy a smoother shopping experience.</p><div class="ao-auth-tabs" role="tablist" aria-label="Account access"><button type="button" class="ao-auth-tab active" id="showLogin" role="tab" aria-selected="true">Sign in</button><button type="button" class="ao-auth-tab" id="showRegister" role="tab" aria-selected="false">Create account</button></div><form id="accountForm" class="ao-auth-form"><div class="field" id="authNameField" hidden><label for="customerName">Full name</label><input id="customerName" autocomplete="name" placeholder="Your full name"></div><div class="field" id="authPhoneField" hidden><label for="customerPhone">Phone number</label><input id="customerPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+255 7XX XXX XXX" aria-describedby="customerPhoneHint"><small id="customerPhoneHint" style="display:block;color:var(--muted);font-size:11px;line-height:1.5;margin-top:5px">Enter your number with country code. No phone OTP is required.</small></div><div class="field"><label for="customerEmail">Email address</label><input id="customerEmail" type="email" required autocomplete="email" placeholder="you@example.com"></div><div class="field"><label for="customerPassword">Password</label><input id="customerPassword" type="password" required minlength="10" autocomplete="current-password" placeholder="Use 10+ characters with upper/lowercase, number & symbol"></div><ul class="ao-password-rules" id="aoSignupRules"><li data-rule="length">At least 10 characters</li><li data-rule="upper">One uppercase letter (A–Z)</li><li data-rule="lower">One lowercase letter (a–z)</li><li data-rule="number">One number (0–9)</li><li data-rule="symbol">One symbol (e.g. !@#$%)</li></ul><button class="btn full" id="authSubmit" type="submit">Sign in ↗︎</button><div class="ao-auth-divider" aria-hidden="true"><span>OR CONTINUE WITH</span></div><button type="button" class="ao-google-auth" id="aoGoogleAuthButton"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.6c3.9-3.6 6.1-8.9 6.1-15Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.8l-6.6-5.1c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4H5.8v5.3A20 20 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.6 27.7a12 12 0 0 1 0-7.4V15H5.8a20 20 0 0 0 0 18Z"/><path fill="#EA4335" d="M24 11.9c3 0 5.7 1 7.8 3.1l5.8-5.8C34.1 6 29.5 4 24 4A20 20 0 0 0 5.8 15l6.8 5.3c1.6-4.8 6.1-8.4 11.4-8.4Z"/></svg><span>Continue with Google</span></button><p class="ao-auth-switch" id="authSwitchText">New to Ajay Outfits? <button type="button" id="authSwitch" class="ao-auth-link">Create an account</button><br><button type="button" id="forgotPasswordBtn" class="ao-auth-link-button">Forgot password?</button></p></form><section id="aoForgotPanel" class="ao-reset-panel" hidden><h3>Reset your password</h3><p class="ao-auth-intro">Enter your account email and we’ll send a secure password-reset link if an account matches.</p><form id="aoForgotForm" class="ao-auth-form"><div class="field"><label for="aoForgotEmail">Email address</label><input id="aoForgotEmail" type="email" required autocomplete="email" placeholder="you@example.com"></div><button class="btn full" id="aoForgotSubmit" type="submit">Send reset link ↗︎</button><button type="button" id="aoBackToLogin" class="ao-auth-link-button">Back to sign in</button></form><div id="aoForgotStatus" class="ao-auth-status" role="status" aria-live="polite"></div></section><section id="aoResetPanel" class="ao-reset-panel" hidden><h3>Choose a new password</h3><p class="ao-auth-intro">Use a strong password you haven’t used elsewhere.</p><form id="aoResetForm" class="ao-auth-form"><div class="field"><label for="aoNewPassword">New password</label><input id="aoNewPassword" type="password" required minlength="10" autocomplete="new-password" placeholder="Create a strong password"></div><ul class="ao-password-rules" id="aoResetRules"><li data-rule="length">At least 10 characters</li><li data-rule="upper">One uppercase letter (A–Z)</li><li data-rule="lower">One lowercase letter (a–z)</li><li data-rule="number">One number (0–9)</li><li data-rule="symbol">One symbol (e.g. !@#$%)</li></ul><div class="field"><label for="aoConfirmPassword">Confirm new password</label><input id="aoConfirmPassword" type="password" required minlength="10" autocomplete="new-password" placeholder="Enter it again"></div><button class="btn full" id="aoResetSubmit" type="submit">Update password ↗︎</button></form><div id="aoResetStatus" class="ao-auth-status" role="status" aria-live="polite"></div></section><div id="accountStatus" class="ao-auth-status" role="status" aria-live="polite"></div><button type="button" id="logoutBtn" class="chip ao-signout" hidden>Sign out</button></div></div>
 <div class="modal" id="sellerModal"><div class="modalbox" style="max-width:560px"><div class="drawer-head"><div><span class="eyebrow">SELL WITH US</span><h2>Open your shop</h2></div><button class="close" data-close="sellerModal" aria-label="Close">×</button></div><p style="color:var(--muted)">Apply to become an Ajay Outfits seller. Once approved, your seller dashboard will unlock so you can manage listings, stock and orders.</p><form id="sellerForm"><div class="formgrid"><div class="field"><label for="sellerName">Shop name</label><input id="sellerName" required maxlength="100" placeholder="Your label"></div><div class="field"><label for="sellerEmail">Contact email</label><input id="sellerEmail" type="email" required maxlength="254" placeholder="you@example.com"></div></div><div class="field"><label for="sellerType">Main product category</label><select id="sellerType"><option>Sneakers</option><option>Apparel</option><option>Accessories</option><option>Mixed collection</option></select></div><button class="btn full" type="submit">Submit seller application ↗︎</button></form><div id="sellerStatus" role="status" aria-live="polite"></div></div></div>
 <div class="modal" id="sellerDashboardModal"><div class="modalbox"><div class="drawer-head"><div><span class="eyebrow">SELLER STUDIO</span><h2 id="sellerDashTitle">Your shop</h2></div><button class="close" data-close="sellerDashboardModal" aria-label="Close seller dashboard">×</button></div><p style="color:var(--muted)">Manage your listings and keep your shop information up to date.</p><div class="feature-band" style="margin:15px 0"><div class="feature"><span class="eyebrow">Your listings</span><h3 id="sellerDashProducts">0</h3></div><div class="feature"><span class="eyebrow">Units in stock</span><h3 id="sellerDashStock">0</h3></div><div class="feature"><span class="eyebrow">Orders to review</span><h3 id="sellerDashOrders">0</h3></div></div><h3>Add a product</h3><form id="sellerProductForm"><div class="formgrid"><div class="field"><label for="sellerProductName">Product name</label><input id="sellerProductName" required maxlength="120" placeholder="Product name"></div><div class="field"><label for="sellerProductBrand">Brand</label><input id="sellerProductBrand" required maxlength="80" placeholder="Brand"></div><div class="field"><label for="sellerProductPrice">Price (USD)</label><input id="sellerProductPrice" type="number" min="1" step=".01" required placeholder="85"></div><div class="field"><label for="sellerProductStock">Stock quantity</label><input id="sellerProductStock" type="number" min="0" max="100000" step="1" required value="1"></div><div class="field"><label for="sellerProductCategory">Category</label><select id="sellerProductCategory"><option>Sneakers</option><option>Apparel</option><option>T-shirts</option><option>Hoodies</option><option>Outerwear</option><option>Denim</option><option>Sportswear</option><option>Footwear</option><option>Bags</option><option>Accessories</option><option>Jewelry</option><option>Watches</option><option>Hats</option></select></div><div class="field"><label for="sellerProductSize">Available sizes</label><input id="sellerProductSize" placeholder="S, M, L, XL or One size"></div><div class="field" style="grid-column:1/-1"><label for="sellerProductImage">Product image URL</label><input id="sellerProductImage" type="url" placeholder="https://..."></div><div class="field" style="grid-column:1/-1"><label for="sellerProductImageFile">Or upload product image from this device</label><input id="sellerProductImageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><small>PNG, JPG, WEBP or GIF · max 2.5 MB. Image is saved with the listing.</small><div id="sellerProductImagePreview" class="upload-preview" hidden></div></div><div class="field" style="grid-column:1/-1"><label for="sellerProductDesc">Description</label><textarea id="sellerProductDesc" rows="3" maxlength="1000" placeholder="Describe the product, condition and fit"></textarea></div></div><button class="btn" type="submit">Publish listing +</button></form><h3 style="margin-top:28px">Your listings</h3><div id="sellerDashListing" class="admin-list"></div><h3 style="margin-top:28px">Orders for your shop</h3><div id="sellerDashOrderList" class="admin-list"></div><p class="secure-note">Keep product details, prices and stock accurate. Keep product details, prices and stock accurate so customers receive the right information.</p></div></div>
-<div class="modal" id="adminModal"><div class="modalbox"><div class="drawer-head"><div><span class="eyebrow">ADMINISTRATION</span><h2>Store management</h2></div><button class="close" data-close="adminModal">×</button></div><p style="color:var(--muted)">Management tools are available only to an authenticated administrator. Manage your catalogue and review store activity from one place. Manage products and review store activity from this dashboard.</p><div class="feature-band" style="margin:15px 0"><div class="feature"><span class="eyebrow">Products</span><h3 id="adminProducts">—</h3></div><div class="feature"><span class="eyebrow">Orders</span><h3 id="adminOrders">0</h3></div><div class="feature"><span class="eyebrow">Seller applications</span><h3 id="adminSellers">0</h3></div></div><div class="ao-seller-applications-head"><h3>Seller applications</h3><span class="ao-seller-applications-live"><i></i> Live updates</span></div><div id="aoSellerApplicationFilters" class="ao-seller-application-filters" role="group" aria-label="Filter seller applications"><button type="button" class="chip is-active" data-seller-filter="Pending review" aria-pressed="true">Pending <span id="aoSellerPendingCount">0</span></button><button type="button" class="chip" data-seller-filter="Approved" aria-pressed="false">Approved <span id="aoSellerApprovedCount">0</span></button><button type="button" class="chip" data-seller-filter="Rejected" aria-pressed="false">Rejected <span id="aoSellerRejectedCount">0</span></button><button type="button" class="chip" data-seller-filter="Disapproved" aria-pressed="false">Disapproved <span id="aoSellerDisapprovedCount">0</span></button><button type="button" class="chip" data-seller-filter="All" aria-pressed="false">All applications</button></div><div id="adminSellerApplications" class="admin-list"></div><h3 style="margin-top:28px">Add a product</h3><form id="addProductForm"><div class="formgrid"><div class="field"><label>Product name</label><input id="newName" required placeholder="Product name"></div><div class="field"><label>Brand</label><input id="newBrand" required placeholder="Brand"></div><div class="field"><label>Price (USD)</label><input id="newPrice" type="number" min="1" step=".01" required placeholder="120"></div><div class="field"><label>Category</label><select id="newCategory"><option>Sneakers</option><option>Apparel</option><option>T-shirts</option><option>Hoodies</option><option>Outerwear</option><option>Denim</option><option>Sportswear</option><option>Footwear</option><option>Bags</option><option>Accessories</option><option>Jewelry</option><option>Watches</option><option>Hats</option><option>Socks</option><option>Collectibles</option><option>Kids</option><option>Beauty</option><option>Home & Lifestyle</option><option>Tech Accessories</option><option>Travel</option><option>Outdoor</option><option>Formalwear</option><option>Swimwear</option></select></div><div class="field"><label for="newImage">Product image URL (optional)</label><input id="newImage" type="url" placeholder="https://..." autocomplete="url"></div><div class="field"><label for="newImageFile">Or upload image from your device</label><input id="newImageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><small>PNG, JPG, WEBP or GIF · max 2.5 MB</small><div id="newImagePreview" class="upload-preview" hidden></div></div><div class="field"><label>Available sizes</label><input id="newSize" placeholder="S, M, L, XL or One size"></div><div class="field"><label for="newStock">Stock quantity</label><input id="newStock" type="number" min="0" max="100000" step="1" value="0" required></div><div class="field"><label>Product tag / collection</label><input id="newTag" placeholder="New drop, Best seller, Limited edition"></div><div class="field"><label>Seller</label><input id="newSeller" placeholder="Ajay Outfits"></div></div><button class="btn">Add product +</button></form><section id="aoNewsletterAdmin" class="ao-newsletter-admin" aria-labelledby="aoNewsletterAdminTitle">
+<div class="modal" id="adminModal"><div class="modalbox"><div class="drawer-head"><div><span class="eyebrow">ADMINISTRATION</span><h2>Store management</h2></div><button class="close" data-close="adminModal">×</button></div><p style="color:var(--muted)">Management tools are available only to an authenticated administrator. Manage your catalogue and review store activity from one place. Manage products and review store activity from this dashboard.</p><div class="feature-band" style="margin:15px 0"><div class="feature"><span class="eyebrow">Products</span><h3 id="adminProducts">—</h3></div><div class="feature"><span class="eyebrow">Orders</span><h3 id="adminOrders">0</h3></div><div class="feature"><span class="eyebrow">Seller applications</span><h3 id="adminSellers">0</h3></div></div><section id="aoDeviceManager" class="ao-device-manager" aria-labelledby="aoDeviceManagerTitle">
+ <div class="ao-device-head"><div><span class="eyebrow">SECURITY</span><h3 id="aoDeviceManagerTitle">Device manager</h3><p>Monitor signed-in devices and manage active sessions.</p></div><button type="button" class="chip" id="aoDeviceRefresh"><svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 1M4 17l2-1a7 7 0 0 0 12.4-3"/></svg> Refresh</button></div>
+ <div class="ao-device-stats"><article><span>Online</span><strong id="aoDeviceOnline">—</strong></article><article><span>Active sessions</span><strong id="aoDeviceActive">—</strong></article><article><span>Accounts</span><strong id="aoDeviceAccounts">—</strong></article></div>
+ <div class="ao-device-controls"><label class="ao-device-search"><svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><input id="aoDeviceSearch" type="search" placeholder="Search accounts, devices or IP addresses" autocomplete="off" aria-label="Search device sessions"></label></div>
+ <nav class="ao-device-tabs" id="aoDeviceTabs" role="tablist" aria-label="Device session filters"><button type="button" class="is-active" data-device-filter="all" role="tab" aria-selected="true">All sessions <span id="aoDeviceTabAll">0</span></button><button type="button" data-device-filter="online" role="tab" aria-selected="false">Online <span id="aoDeviceTabOnline">0</span></button><button type="button" data-device-filter="idle" role="tab" aria-selected="false">Idle <span id="aoDeviceTabIdle">0</span></button><button type="button" data-device-filter="offline" role="tab" aria-selected="false">Offline <span id="aoDeviceTabOffline">0</span></button><button type="button" data-device-filter="revoked" role="tab" aria-selected="false">Revoked <span id="aoDeviceTabRevoked">0</span></button><button type="button" data-device-filter="hidden" role="tab" aria-selected="false">Hidden <span id="aoDeviceTabHidden">0</span></button></nav>
+ <div id="aoDeviceMessage" class="ao-device-message" role="status" aria-live="polite">Loading device activity…</div>
+ <div class="ao-device-table-wrap"><table class="ao-device-table"><thead><tr><th>Account / device</th><th>IP address</th><th>Signed in</th><th>Last seen</th><th>Status</th><th></th></tr></thead><tbody id="aoDeviceRows"><tr><td colspan="6">Loading sessions…</td></tr></tbody></table></div>
+ <div class="ao-device-mobile-list" id="aoDeviceMobileRows"></div>
+ <div class="ao-device-footer"><span id="aoDeviceCount">0 sessions</span><button type="button" class="chip" id="aoDeviceRevokeAll">Revoke all sessions</button></div>
+</section>
+<div class="ao-seller-applications-head"><h3>Seller applications</h3><span class="ao-seller-applications-live"><i></i> Live updates</span></div><div id="aoSellerApplicationFilters" class="ao-seller-application-filters" role="group" aria-label="Filter seller applications"><button type="button" class="chip is-active" data-seller-filter="Pending review" aria-pressed="true">Pending <span id="aoSellerPendingCount">0</span></button><button type="button" class="chip" data-seller-filter="Approved" aria-pressed="false">Approved <span id="aoSellerApprovedCount">0</span></button><button type="button" class="chip" data-seller-filter="Rejected" aria-pressed="false">Rejected <span id="aoSellerRejectedCount">0</span></button><button type="button" class="chip" data-seller-filter="Disapproved" aria-pressed="false">Disapproved <span id="aoSellerDisapprovedCount">0</span></button><button type="button" class="chip" data-seller-filter="All" aria-pressed="false">All applications</button></div><div id="adminSellerApplications" class="admin-list"></div><h3 style="margin-top:28px">Add a product</h3><form id="addProductForm"><div class="formgrid"><div class="field"><label>Product name</label><input id="newName" required placeholder="Product name"></div><div class="field"><label>Brand</label><input id="newBrand" required placeholder="Brand"></div><div class="field"><label>Price (USD)</label><input id="newPrice" type="number" min="1" step=".01" required placeholder="120"></div><div class="field"><label>Category</label><select id="newCategory"><option>Sneakers</option><option>Apparel</option><option>T-shirts</option><option>Hoodies</option><option>Outerwear</option><option>Denim</option><option>Sportswear</option><option>Footwear</option><option>Bags</option><option>Accessories</option><option>Jewelry</option><option>Watches</option><option>Hats</option><option>Socks</option><option>Collectibles</option><option>Kids</option><option>Beauty</option><option>Home & Lifestyle</option><option>Tech Accessories</option><option>Travel</option><option>Outdoor</option><option>Formalwear</option><option>Swimwear</option></select></div><div class="field"><label for="newImage">Product image URL (optional)</label><input id="newImage" type="url" placeholder="https://..." autocomplete="url"></div><div class="field"><label for="newImageFile">Or upload image from your device</label><input id="newImageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><small>PNG, JPG, WEBP or GIF · max 2.5 MB</small><div id="newImagePreview" class="upload-preview" hidden></div></div><div class="field"><label>Available sizes</label><input id="newSize" placeholder="S, M, L, XL or One size"></div><div class="field"><label for="newStock">Stock quantity</label><input id="newStock" type="number" min="0" max="100000" step="1" value="0" required></div><div class="field"><label>Product tag / collection</label><input id="newTag" placeholder="New drop, Best seller, Limited edition"></div><div class="field"><label>Seller</label><input id="newSeller" placeholder="Ajay Outfits"></div></div><button class="btn">Add product +</button></form><section id="aoNewsletterAdmin" class="ao-newsletter-admin" aria-labelledby="aoNewsletterAdminTitle">
  <div class="ao-newsletter-admin-head"><span class="eyebrow">CUSTOMER ENGAGEMENT</span><h3 id="aoNewsletterAdminTitle">Newsletter & promotions</h3><p>Create a branded promotion and send it to your subscribed Brevo audience.</p></div>
  <form id="aoPromotionForm" class="ao-promotion-form">
   <div class="formgrid">
@@ -1982,24 +2105,31 @@ window.aoSupabaseReady = (function initAjaySupabase(){
   const cfg = window.AJAY_SUPABASE_CONFIG;
   if (!cfg || !cfg.url || !cfg.anonKey || cfg.url.includes('YOUR-PROJECT-REF') || cfg.anonKey.includes('YOUR_SUPABASE')) return Promise.resolve(null);
   return new Promise(resolve => {
-    let settled = false;
-    const finish = value => { if(settled)return; settled=true; resolve(value||null); };
+    let settled = false, failures = 0, bootstrapTimer = 0;
+    const finish = value => { if(settled)return; settled=true; window.clearTimeout(bootstrapTimer); resolve(value||null); };
     const start = () => {
       try {
         if (window.supabase?.createClient) {
-          window.ajaySupabase = window.supabase.createClient(cfg.url, cfg.anonKey);
+          window.ajaySupabase = window.ajaySupabase || window.supabase.createClient(cfg.url, cfg.anonKey);
           finish(window.ajaySupabase);
-        } else finish(null);
+        } else { failures++; if(failures>=2)finish(null); }
       } catch(err) { console.warn('Supabase client initialization failed:',err); finish(null); }
     };
     if (window.supabase?.createClient) { start(); return; }
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-    script.async = true;
-    script.onload = start;
-    script.onerror = () => { console.warn('Supabase client library could not be loaded.'); finish(null); };
-    document.head.appendChild(script);
-    window.setTimeout(() => finish(window.ajaySupabase), 15000);
+    // Race two supported CDNs: a slow/unreachable first CDN must not hold the whole
+    // storefront behind a 15-second script timeout. Whichever loads first wins.
+    const load = src => {
+      const script = document.createElement('script');
+      script.src = src; script.async = true; script.onload = start;
+      script.onerror = () => { failures++; if(failures>=2){console.warn('Supabase client library could not be loaded from either CDN.');finish(null);} };
+      document.head.appendChild(script);
+    };
+    bootstrapTimer=window.setTimeout(()=>{
+      if(window.supabase?.createClient)start();
+      else {console.warn('Supabase client bootstrap timed out.');finish(null);}
+    },12000);
+    load('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2');
+    load('https://unpkg.com/@supabase/supabase-js@2');
   });
 })();
 // Native Android/iOS push-token registration. The wrapper dispatches this event after
@@ -2292,51 +2422,83 @@ async function syncAjayDataToSupabase(){
 }
 async function aoHydrateAjayDataFromSupabaseOnce(){
  const db=window.ajaySupabase;if(!db)return;
- const productRequest=Promise.resolve(db.from('ao_products').select('id,data'));
- // Orders and seller applications are private account data: never query them with the public anon session.
- const sessionRequest=Promise.resolve(db.auth.getSession()).catch(()=>({data:{session:null}}));
- const orderRequest=sessionRequest.then(result=>result?.data?.session?.user?db.from('ao_orders').select('id,data'):{data:[],error:null,skipped:true});
- const sellerRequest=sessionRequest.then(result=>result?.data?.session?.user?db.from('ao_seller_applications').select('id,data'):{data:[],error:null,skipped:true});
+ // Retry idempotent reads only. Writes are never retried by this helper.
+ const aoRetryCloudRead=async(makeRequest,attempts=3)=>{
+  let lastError=null;
+  for(let attempt=0;attempt<attempts;attempt++){
+   try{const result=await makeRequest();if(!result?.error)return result;lastError=result.error;
+    const message=String(lastError.message||lastError);
+    if(!/failed to fetch|network|quic|timeout|temporar/i.test(message))return result;
+   }catch(error){lastError=error;const message=String(error?.message||error);if(!/failed to fetch|network|quic|timeout|temporar/i.test(message))throw error;}
+   if(attempt<attempts-1)await new Promise(resolve=>setTimeout(resolve,350*(attempt+1)));
+  }
+  return {data:null,error:lastError||new Error('Cloud read failed after retries')};
+ };
+ const HOMEPAGE_SETTINGS_ID='__ao_homepage_images__';
+ // Fetch Admin-published homepage images separately from the full catalogue. This
+ // prevents a slow products query from leaving the hero on demo imagery or hidden.
+ const homepageSettingsRequest=aoRetryCloudRead(()=>db.from('ao_products').select('id,data').eq('id',HOMEPAGE_SETTINGS_ID).maybeSingle());
+ homepageSettingsRequest.then(result=>{
+  if(result?.error){
+   window.__aoHomepageImagesCloudLoadError=result.error.message;
+   console.warn('[Homepage images] Could not load Admin-published settings:',result.error.message);
+   return; // Keep the demo/seed hero hidden; do not replace Admin imagery with a guess.
+  }
+  const row=result?.data||null;
+  window.__aoHomepageImagesCloudExists=!!row;
+  window.__aoHomepageImagesCloud=row?.data?.images&&typeof row.data.images==='object'?row.data.images:{};
+  document.documentElement.dataset.aoHomepageImagesCloudResolved='true';
+  window.dispatchEvent(new CustomEvent('ao:homepage-images-cloud-loaded',{detail:{images:window.__aoHomepageImagesCloud}}));
+ }).catch(err=>{
+  window.__aoHomepageImagesCloudLoadError=String(err?.message||err);
+  console.warn('[Homepage images] Admin settings request failed:',err?.message||err);
+ });
+ const productRequest=aoRetryCloudRead(()=>db.from('ao_products').select('id,data'));
+ // Private account data must never be requested without an authenticated user.
+ const sessionRequest=aoRetryCloudRead(()=>db.auth.getSession()).catch(()=>({data:{session:null}}));
+ const orderRequest=sessionRequest.then(result=>result?.data?.session?.user?aoRetryCloudRead(()=>db.from('ao_orders').select('id,data')):{data:[],error:null,skipped:true});
+ const sellerRequest=sessionRequest.then(result=>result?.data?.session?.user?aoRetryCloudRead(()=>db.from('ao_seller_applications').select('id,data')):{data:[],error:null,skipped:true});
  let productApplied=false;
  const applyProductResult=pr=>{
   if(productApplied)return;productApplied=true;
-  if(pr?.error){aoProductsCloudReadable=false;console.warn('Could not hydrate products:',pr.error.message);document.documentElement.classList.remove('ao-cloud-hydrating','ao-no-local-catalogue');return;}
+  if(pr?.error){aoProductsCloudReadable=false;console.warn('Could not hydrate products:',pr.error.message);document.documentElement.classList.remove('ao-cloud-hydrating','ao-no-local-catalogue');document.documentElement.dataset.aoStorefrontHydrated='true';try{document.dispatchEvent(new Event('ao:storefront-hydrated'))}catch(_){}return;}
   aoProductsCloudReadable=true;
   const rows=pr?.data||[];
-  const homepageSettingsRow=rows.find(r=>String(r.id)==='__ao_homepage_images__');
-  window.__aoHomepageImagesCloudExists=!!homepageSettingsRow;
-  window.__aoHomepageImagesCloud=homepageSettingsRow?.data?.images&&typeof homepageSettingsRow.data.images==='object'?homepageSettingsRow.data.images:{};
+  // The dedicated homepage settings request owns the authoritative image state.
+  // Use the full catalogue row only as a fallback if that request has not resolved.
+  const homepageSettingsRow=rows.find(r=>String(r.id)===HOMEPAGE_SETTINGS_ID);
+  if(document.documentElement.dataset.aoHomepageImagesCloudResolved!=='true'&&homepageSettingsRow){
+   window.__aoHomepageImagesCloudExists=true;
+   window.__aoHomepageImagesCloud=homepageSettingsRow?.data?.images&&typeof homepageSettingsRow.data.images==='object'?homepageSettingsRow.data.images:{};
+   document.documentElement.dataset.aoHomepageImagesCloudResolved='true';
+   window.dispatchEvent(new CustomEvent('ao:homepage-images-cloud-loaded',{detail:{images:window.__aoHomepageImagesCloud}}));
+  }
   window.__aoInitialProductHydrationComplete=true;
-  products=rows.filter(r=>String(r.id)!=='__ao_homepage_images__').map(r=>r.data).filter(Boolean);
+  products=rows.filter(r=>String(r.id)!==HOMEPAGE_SETTINGS_ID).map(r=>r.data).filter(Boolean);
   write('products',products);
   aoLastSyncedProducts=new Map(products.filter(p=>p&&p.id!=null).map(p=>[String(p.id),aoRecordFingerprint(p)]));
   refreshBrandOptions();refreshCategoryOptions();renderProducts();updateCounts();updateAdmin();renderSearchSuggestions();
-  window.dispatchEvent(new CustomEvent('ao:homepage-images-cloud-loaded',{detail:{images:window.__aoHomepageImagesCloud}}));
-  // Do not hold storefront imagery behind order or seller-account queries.
+  aoSyncBaselineReady=true;
   document.documentElement.classList.remove('ao-cloud-hydrating','ao-no-local-catalogue');
   document.documentElement.dataset.aoStorefrontHydrated='true';
   try{document.dispatchEvent(new Event('ao:storefront-hydrated'))}catch(_){}
  };
- // Apply catalogue imagery immediately when its independent request resolves.
- productRequest.then(applyProductResult).catch(err=>{console.warn('Could not hydrate products:',err);document.documentElement.classList.remove('ao-cloud-hydrating','ao-no-local-catalogue')});
- try{
-  const [pr,or,sr]=await Promise.all([productRequest,orderRequest,sellerRequest]);
-  applyProductResult(pr);
-  if(or.skipped){/* Guest storefront: retain local cache and wait for sign-in before private order reads. */}
+ // Product data is applied as soon as its request completes; it does not block startup.
+ productRequest.then(applyProductResult).catch(err=>{console.warn('Could not hydrate products:',err);document.documentElement.classList.remove('ao-cloud-hydrating','ao-no-local-catalogue');document.documentElement.dataset.aoStorefrontHydrated='true';try{document.dispatchEvent(new Event('ao:storefront-hydrated'))}catch(_){}});
+ // Orders and seller data hydrate independently and cannot hold up the storefront.
+ void Promise.all([orderRequest,sellerRequest]).then(([or,sr])=>{
+  if(or.skipped){/* Guest storefront: wait for sign-in before private order reads. */}
   else if(or.error){aoOrdersCloudReadable=false;console.warn('Could not hydrate orders:',or.error.message,'Order data was left untouched locally; check ao_orders SELECT grants and RLS policies.');}
   else {aoOrdersCloudReadable=true;orders=(or.data||[]).map(r=>r.data).filter(Boolean);window.__aoInitialOrderHydrationComplete=true;write('orders',orders);aoLastSyncedOrders=new Map(orders.filter(o=>o&&o.id!=null).map(o=>[String(o.id),aoRecordFingerprint(o)]));}
-  if(sr.skipped){/* Guest storefront: seller application data is private until sign-in. */}
+  if(sr.skipped){/* Guest storefront: seller application data stays private. */}
   else if(sr.error){aoSellerAppsCloudReadable=false;console.warn('Could not hydrate seller applications. Check ao_seller_applications SELECT grants and RLS policies:',sr.error.message);}
   else {aoSellerAppsCloudReadable=true;sellers=(sr.data||[]).map(r=>r?.data?{...r.data,id:String(r.id||r.data.id||''),updated_at:r.updated_at||r.data.updated_at||''}:null).filter(Boolean);window.__aoInitialSellerHydrationComplete=true;write('sellers',sellers);}
-  aoSyncBaselineReady=aoProductsCloudReadable;
-  // Order renderer lives in its own module scope; use its explicit public bridge.
   if(typeof window.aoRenderCustomerOrders==='function')window.aoRenderCustomerOrders();
   if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();
   if(typeof renderSellerDashboard==='function')renderSellerDashboard();
   if(typeof updateAdmin==='function')updateAdmin();
- }catch(err){console.warn('Could not load catalogue data from Supabase:',err);document.documentElement.classList.remove('ao-cloud-hydrating','ao-no-local-catalogue')}
+ }).catch(err=>console.warn('Private account data refresh was deferred:',err?.message||err));
 }
-
 
 // Share one in-flight full-store hydration across navigation, realtime and notification callers.
 let aoHydrationInFlight=null;
@@ -2395,7 +2557,7 @@ function aoCustomerWishlistControl(p){
  if(aoIsStaff())return '';
  return `<button class="heart ${wishlist.includes(p.id)?'saved':''}" data-wish="${safe(p.id)}" aria-label="Save ${safe(p.name)}">${'<svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.8a5.4 5.4 0 0 0-7.6 0L12 6l-1.2-1.2a5.4 5.4 0 0 0-7.6 7.6l1.2 1.2L12 21l7.6-7.4 1.2-1.2a5.4 5.4 0 0 0 0-7.6Z" '+(wishlist.includes(p.id)?'fill="currentColor"':'fill="none"')+' /></svg>'}</button>`;
 }
-function renderProducts(){const filterSignature=[category,query,sort,brandFilter,conditionFilter,priceFilter].join('|');if(filterSignature!==aoProductFilterSignature){aoProductFilterSignature=filterSignature;aoProductVisibleLimit=50;}let list=products.filter(p=>(category==='All'||category==='New'&&p.isNew||category==='Under $100'&&p.price<100||p.category===category)&&(`${p.name} ${p.brand} ${p.category} ${p.seller} ${p.tag||''}`.toLowerCase().includes(query.toLowerCase()))&&(brandFilter==='All'||p.brand===brandFilter)&&(conditionFilter==='All'||p.condition===conditionFilter)&&aoMatchesPriceFilter(p));if(sort==='low')list.sort((a,b)=>a.price-b.price);if(sort==='high')list.sort((a,b)=>b.price-a.price);if(sort==='name')list.sort((a,b)=>a.name.localeCompare(b.name));if(sort==='new')list.sort((a,b)=>Number(!!b.isNew)-Number(!!a.isNew));$('#resultCount').textContent=`Showing ${Math.min(aoProductVisibleLimit,list.length).toLocaleString()} of ${list.length.toLocaleString()} ${list.length===1?'piece':'pieces'}${query?' for “'+query+'”':''}`;$('#noResults').classList.toggle('hide',list.length>0);const total=list.length,shownList=list.slice(0,aoProductVisibleLimit),shown=shownList.length,remaining=Math.max(0,total-shown);$('#products').innerHTML=shownList.map(p=>`<article class="product" tabindex="0" role="button" aria-label="View ${safe(p.name)}" data-open="${safe(p.id)}"><div class="product-image"><img src="${safe(p.image)}" alt="${safe(p.name)}" loading="lazy" decoding="async" onerror="this.hidden=true;this.closest('.product-image')?.classList.add('ao-image-unavailable')"><span class="pill">${safe(p.tag||p.category)}</span>${aoCustomerWishlistControl(p)}</div><div class="product-meta"><div class="brand">${safe(p.brand)} · ${safe(p.category)}</div><div class="product-title">${safe(p.name)}</div><div class="product-sub">${safe(p.condition)} · ${safe(p.seller)}</div><div class="ao-stock-line">${aoProductStockMarkup(p)}</div><div class="price-row"><span class="price">${money(p.price)}</span><span class="condition">${safe(p.size)}</span></div></div></article>`).join('');const pager=$('#aoProductPagination');if(pager){pager.hidden=remaining===0;pager.innerHTML=remaining>0?'<a class="ao-product-more" href="#shop" data-ao-products-more aria-label="Show next products. '+remaining+' remaining"><span class="ao-product-more-copy"><span class="ao-product-more-kicker">KEEP DISCOVERING</span><strong>See more pieces <span aria-hidden="true">↗</span></strong><small>Showing '+shown.toLocaleString()+' of '+total.toLocaleString()+' · '+remaining.toLocaleString()+' more to explore</small></span><span class="ao-product-more-progress" aria-hidden="true"><span style="width:'+Math.min(100,shown/total*100)+'%"></span></span></a>':'';}updateCounts()}
+function renderProducts(){const filterSignature=[category,query,sort,brandFilter,conditionFilter,priceFilter].join('|');if(filterSignature!==aoProductFilterSignature){aoProductFilterSignature=filterSignature;aoProductVisibleLimit=50;}let list=products.filter(p=>(category==='All'||category==='New'&&p.isNew||category==='Under $100'&&p.price<100||p.category===category)&&(`${p.name} ${p.brand} ${p.category} ${p.seller} ${p.tag||''}`.toLowerCase().includes(query.toLowerCase()))&&(brandFilter==='All'||p.brand===brandFilter)&&(conditionFilter==='All'||p.condition===conditionFilter)&&aoMatchesPriceFilter(p));if(sort==='low')list.sort((a,b)=>a.price-b.price);if(sort==='high')list.sort((a,b)=>b.price-a.price);if(sort==='name')list.sort((a,b)=>a.name.localeCompare(b.name));if(sort==='new')list.sort((a,b)=>Number(!!b.isNew)-Number(!!a.isNew));$('#resultCount').textContent=`Showing ${Math.min(aoProductVisibleLimit,list.length).toLocaleString()} of ${list.length.toLocaleString()} ${list.length===1?'piece':'pieces'}${query?' for “'+query+'”':''}`;$('#noResults').classList.toggle('hide',list.length>0);const total=list.length,shownList=list.slice(0,aoProductVisibleLimit),shown=shownList.length,remaining=Math.max(0,total-shown);$('#products').innerHTML=shownList.map((p,i)=>`<article class="product" tabindex="0" role="button" aria-label="View ${safe(p.name)}" data-open="${safe(p.id)}"><div class="product-image"><img src="${safe(p.image)}" alt="${safe(p.name)}" loading="${i<8?'eager':'lazy'}" ${i<8?'fetchpriority="high"':''} decoding="async" onerror="this.hidden=true;this.closest('.product-image')?.classList.add('ao-image-unavailable')"><span class="pill">${safe(p.tag||p.category)}</span>${aoCustomerWishlistControl(p)}</div><div class="product-meta"><div class="brand">${safe(p.brand)} · ${safe(p.category)}</div><div class="product-title">${safe(p.name)}</div><div class="product-sub">${safe(p.condition)} · ${safe(p.seller)}</div><div class="ao-stock-line">${aoProductStockMarkup(p)}</div><div class="price-row"><span class="price">${money(p.price)}</span><span class="condition">${safe(p.size)}</span></div></div></article>`).join('');const pager=$('#aoProductPagination');if(pager){pager.hidden=remaining===0;pager.innerHTML=remaining>0?'<a class="ao-product-more" href="#shop" data-ao-products-more aria-label="Show next products. '+remaining+' remaining"><span class="ao-product-more-copy"><span class="ao-product-more-kicker">KEEP DISCOVERING</span><strong>See more pieces <span aria-hidden="true">↗</span></strong><small>Showing '+shown.toLocaleString()+' of '+total.toLocaleString()+' · '+remaining.toLocaleString()+' more to explore</small></span><span class="ao-product-more-progress" aria-hidden="true"><span style="width:'+Math.min(100,shown/total*100)+'%"></span></span></a>':'';}updateCounts()}
 function setCategory(cat,options={}){
   category=cat;
   /* A category change starts a clean, predictable product view. Clear stale search and filters so switching back to All never leaves the grid empty because of an unrelated previous filter. */
@@ -3330,8 +3492,8 @@ if(mobileMenuBtn && primaryNav){
 $$('.logo-brand').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();window.scrollTo({top:0,behavior:'smooth'});}));
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){ $$('.modal.show').forEach(m=>m.classList.remove('show')); $('#drawerOverlay').classList.remove('show');hideSearchSuggestions();}});
 // Marketplace discovery interactions: featured brands, curated edits, release radar and editorial cards.
-$('[data-brand-search]').forEach(btn=>btn.addEventListener('click',()=>{aoResetProductBatch();const brand=btn.dataset.brandSearch;query=brand;$('#search').value=brand;category='All';brandFilter='All';conditionFilter='All';priceFilter='all';$('#brandFilter').value='All';$('#conditionFilter').value='All';$('#priceFilter').value='all';renderProducts();$('#shop').scrollIntoView({behavior:'smooth',block:'start'});}));
-$('[data-collection]').forEach(btn=>btn.addEventListener('click',()=>{aoResetProductBatch();const mode=btn.dataset.collection;category='All';query='';brandFilter='All';conditionFilter='All';priceFilter='all';sort='featured';$('#search').value='';$('#brandFilter').value='All';$('#conditionFilter').value='All';$('#priceFilter').value='all';$('#sort').value='featured';if(mode==='new')category='New';if(mode==='under100')category='Under $100';if(mode==='archive'){conditionFilter='Excellent';$('#conditionFilter').value='Excellent';}$$('#filters .chip[data-cat]').forEach(b=>b.classList.toggle('active',b.dataset.cat===category));if(mode==='wanted'){const pager=$('#aoProductPagination');if(pager){pager.hidden=true;pager.innerHTML='';}const wanted=products.filter(p=>/trending|bestseller|iconic|just dropped|curated/i.test((p.tag||'')+' '+p.name));$('#resultCount').textContent=`${wanted.length} most-wanted picks`;$('#noResults').classList.toggle('hide',wanted.length>0);$('#products').innerHTML=wanted.map(p=>`<article class="product" tabindex="0" role="button" aria-label="View ${safe(p.name)}" data-open="${safe(p.id)}"><div class="product-image"><img src="${safe(p.image)}" alt="${safe(p.name)}" loading="lazy"><span class="pill">${safe(p.tag||p.category)}</span>${aoCustomerWishlistControl(p)}</div><div class="product-meta"><div class="brand">${safe(p.brand)} · ${safe(p.category)}</div><div class="product-title">${safe(p.name)}</div><div class="product-sub">${safe(p.condition)} · ${safe(p.seller)}</div><div class="price-row"><span class="price">${money(p.price)}</span><span class="condition">${safe(p.size)}</span></div></div></article>`).join('');updateCounts();}else renderProducts();$('#shop').scrollIntoView({behavior:'smooth',block:'start'});}));
+$$('[data-brand-search]').forEach(btn=>btn.addEventListener('click',()=>{aoResetProductBatch();const brand=btn.dataset.brandSearch;query=brand;$('#search').value=brand;category='All';brandFilter='All';conditionFilter='All';priceFilter='all';$('#brandFilter').value='All';$('#conditionFilter').value='All';$('#priceFilter').value='all';renderProducts();$('#shop').scrollIntoView({behavior:'smooth',block:'start'});}));
+$$('[data-collection]').forEach(btn=>btn.addEventListener('click',()=>{aoResetProductBatch();const mode=btn.dataset.collection;category='All';query='';brandFilter='All';conditionFilter='All';priceFilter='all';sort='featured';$('#search').value='';$('#brandFilter').value='All';$('#conditionFilter').value='All';$('#priceFilter').value='all';$('#sort').value='featured';if(mode==='new')category='New';if(mode==='under100')category='Under $100';if(mode==='archive'){conditionFilter='Excellent';$('#conditionFilter').value='Excellent';}$$('#filters .chip[data-cat]').forEach(b=>b.classList.toggle('active',b.dataset.cat===category));if(mode==='wanted'){const pager=$('#aoProductPagination');if(pager){pager.hidden=true;pager.innerHTML='';}const wanted=products.filter(p=>/trending|bestseller|iconic|just dropped|curated/i.test((p.tag||'')+' '+p.name));$('#resultCount').textContent=`${wanted.length} most-wanted picks`;$('#noResults').classList.toggle('hide',wanted.length>0);$('#products').innerHTML=wanted.map(p=>`<article class="product" tabindex="0" role="button" aria-label="View ${safe(p.name)}" data-open="${safe(p.id)}"><div class="product-image"><img src="${safe(p.image)}" alt="${safe(p.name)}" loading="lazy"><span class="pill">${safe(p.tag||p.category)}</span>${aoCustomerWishlistControl(p)}</div><div class="product-meta"><div class="brand">${safe(p.brand)} · ${safe(p.category)}</div><div class="product-title">${safe(p.name)}</div><div class="product-sub">${safe(p.condition)} · ${safe(p.seller)}</div><div class="price-row"><span class="price">${money(p.price)}</span><span class="condition">${safe(p.size)}</span></div></div></article>`).join('');updateCounts();}else renderProducts();$('#shop').scrollIntoView({behavior:'smooth',block:'start'});}));
 $$('[data-release-browse]').forEach(btn=>btn.addEventListener('click',()=>setCategory('Sneakers')));$$('[data-release-category]').forEach(btn=>btn.addEventListener('click',()=>setCategory(btn.dataset.releaseCategory)));
 $$('[data-editorial]').forEach(btn=>btn.addEventListener('click',()=>{const pages={style:['The AO style guide','<p>Build a versatile rotation with one statement piece, everyday staples and a finishing accessory. Choose colours that work together, balance proportions, and let one item lead the outfit.</p><h3>Start with the foundation</h3><ul><li>Pick sneakers or a jacket as the anchor.</li><li>Add a neutral tee or hoodie for easy layering.</li><li>Finish with a bag, cap or understated jewellery.</li></ul>'],care:['Product care & condition','<p>Read each listing carefully before purchase. Product condition labels are seller-entered and are not independently verified unless stated.</p><h3>Keep your pieces looking their best</h3><ul><li>Follow the care label on apparel.</li><li>Store footwear in a cool, dry place.</li><li>Use suitable materials and cleaning products for each item.</li></ul><p>A production marketplace should inspect listings and clearly disclose defects, authenticity checks and return terms.</p>'],seller:['Sell with Ajay Outfits','<p>Have a piece someone else will love? Prepare clear photos, an accurate description, size, condition and price. Seller applications are reviewed before selling access is confirmed.</p>']};const page=pages[btn.dataset.editorial];if(page)showInfo(page[0],page[1]);if(btn.dataset.editorial==='seller')openModal('sellerModal');}));
 
@@ -3344,14 +3506,14 @@ $('#year').textContent=new Date().getFullYear();refreshBrandOptions();refreshCat
 window.__aoStorefrontHydrationPromise=(async()=>{
  let revealed=false;
  const reveal=()=>{if(revealed)return;revealed=true;document.documentElement.classList.remove('ao-cloud-hydrating');document.documentElement.dataset.aoStorefrontHydrated='true';try{document.dispatchEvent(new Event('ao:storefront-hydrated'))}catch(_){}};
- // Fail open only if the cloud bootstrap itself stalls; a later successful hydration
- // still replaces the cached view with the authoritative saved state.
- const safetyTimer=setTimeout(()=>{if(!revealed){console.warn('[Storefront] Cloud hydration is taking longer than expected; showing the locally cached view while it continues.');reveal();}},16000);
+ // Reveal the local cached storefront immediately. Admin image settings, catalogue,
+ // orders and seller records continue loading independently and replace cached data
+ // only after their own successful cloud responses.
  try{
   const db=await window.aoSupabaseReady;
   if(db&&typeof hydrateAjayDataFromSupabase==='function')await hydrateAjayDataFromSupabase();
  }catch(err){console.warn('Supabase startup was deferred:',err)}
- finally{clearTimeout(safetyTimer);reveal();}
+ finally{reveal();}
 })();
 </script>
 
@@ -3547,6 +3709,7 @@ html:not([data-theme]) body :is(button,a,input,select,textarea):focus-visible, h
  const CLOUD_SETTINGS_ID='__ao_homepage_images__';
  const getSaved=()=>{try{return JSON.parse(stateStore.getItem('ao_sectionImages')||'{}')}catch{return {}}};
  let saved={...getSaved(),...(window.__aoHomepageImagesCloud||{})};
+ if(saved['hero-main'])document.documentElement.classList.remove('ao-admin-images-pending');
  // Dedicated Supabase Broadcast channel for homepage image settings. The database
  // row is still the durable source; Broadcast pushes the new URLs to already-open
  // customer and seller sessions immediately, without relying on row-level change
@@ -3616,10 +3779,10 @@ html:not([data-theme]) body :is(button,a,input,select,textarea):focus-visible, h
  async function uploadImage(file,id){return uploadBlob(await compressFile(file),id)}
  async function migrateLegacyImages(localImages){if(!localImages||!Object.keys(localImages).length||!(typeof window.aoIsAdmin==='function'&&window.aoIsAdmin()))return;const migrated={};for(const [id,value] of Object.entries(localImages)){if(typeof value==='string'&&/^data:image\//i.test(value)){const blob=await (await fetch(value)).blob();migrated[id]=await uploadBlob(blob,id)}else if(typeof value==='string'&&value.trim())migrated[id]=value}await saveCloudSettings(migrated);if(typeof toast==='function')toast('Previous homepage images have been moved to shared cloud storage')}
  document.addEventListener('click',async e=>{const save=e.target.closest('[data-save-section-image]');const clear=e.target.closest('[data-clear-section-image]');if(!save&&!clear)return;const id=(save||clear).dataset[save?'saveSectionImage':'clearSectionImage'];const spec=slotSpecs.find(x=>x.id===id);if(!spec)return;const row=$q(`[data-image-row="${id}"]`);const button=save||clear;if(button.disabled)return;button.disabled=true;const oldLabel=button.textContent;button.textContent=clear?'Updating…':'Saving…';try{const next={...saved};if(clear){delete next[id];await saveCloudSettings(next);if(typeof toast==='function')toast(spec.hero?'Homepage hero image reset to default':'Homepage image reset to matching catalogue product')}else{const url=$q('input[type="url"]',row).value.trim();const file=$q('input[type="file"]',row).files?.[0];if(file)next[id]=await uploadImage(file,id);else if(url){let parsed;try{parsed=new URL(url)}catch(_){throw new Error('Enter a valid public image URL or choose an image file.')}if(!['http:','https:'].includes(parsed.protocol))throw new Error('Image URL must start with https:// or http://');next[id]=url}else delete next[id];await saveCloudSettings(next);if(typeof toast==='function')toast('Homepage image saved and shared with all visitors')} }catch(err){console.error('[Homepage images]',err);if(typeof toast==='function')toast(err.message||'Could not save homepage image');else alert(err.message)}finally{button.disabled=false;button.textContent=oldLabel}});
- window.addEventListener('ao:homepage-images-cloud-loaded',e=>{const remote=e.detail?.images;if(remote&&typeof remote==='object'){const local=getSaved();if(!window.__aoHomepageImagesCloudExists&&Object.keys(local).length){saved={...local};applyImages();renderEditor();migrateLegacyImages(local).catch(err=>{console.warn('[Homepage images] Legacy image migration could not finish:',err);if(typeof toast==='function')toast('Previous local images remain on this browser. Check Storage permissions to share them.')});return}saved={...remote};try{stateStore.setItem('ao_sectionImages',JSON.stringify(saved))}catch(_){}applyImages();renderEditor()}});
+ window.addEventListener('ao:homepage-images-cloud-loaded',e=>{const remote=e.detail?.images;if(remote&&typeof remote==='object'){const local=getSaved();if(!window.__aoHomepageImagesCloudExists&&Object.keys(local).length){saved={...local};applyImages();renderEditor();migrateLegacyImages(local).catch(err=>{console.warn('[Homepage images] Legacy image migration could not finish:',err);if(typeof toast==='function')toast('Previous local images remain on this browser. Check Storage permissions to share them.')});return}saved={...remote};try{stateStore.setItem('ao_sectionImages',JSON.stringify(saved))}catch(_){}applyImages();renderEditor();if(document.documentElement.dataset.aoHomepageImagesCloudResolved==='true')document.documentElement.classList.remove('ao-admin-images-pending')}});
  // Re-render image editor whenever Admin opens or catalogue updates; wrap existing admin refresh without changing its behaviour.
  if(typeof updateAdmin==='function'){const originalUpdateAdmin=updateAdmin;window.updateAdmin=function(){originalUpdateAdmin();renderEditor()}}
- if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{applyImages();renderEditor()});else{applyImages();renderEditor()}
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{applyImages();renderEditor();if(document.documentElement.dataset.aoHomepageImagesCloudResolved==='true')document.documentElement.classList.remove('ao-admin-images-pending')});else{applyImages();renderEditor();if(document.documentElement.dataset.aoHomepageImagesCloudResolved==='true')document.documentElement.classList.remove('ao-admin-images-pending')}
  document.addEventListener('ao:storefront-hydrated',()=>{applyImages();renderEditor()},{once:true});
 })();
 </script>
@@ -5943,6 +6106,7 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
    try{window.aoUpdateRoleLinks?.()}catch(err){console.warn('[Role] Navigation sync deferred:',err?.message||err)}
    const role=window.aoIsAdmin?.()?'admin':window.aoCanSell?.()?'seller':'customer';
    const resolvedUser=userId();
+   try{window.__aoSetRoleFastCache?.(resolvedUser,role);root.dataset.aoRoleReady='true';}catch(_){}
    window.dispatchEvent(new CustomEvent('ao:role-resolved',{detail:{role,userId:resolvedUser,previousUserId:firstUser}}));
    return result;
   })().finally(()=>{active=null;root.classList.remove('ao-role-refreshing');if(rerun){rerun=false;wrapped.apply(caller,args).catch(err=>console.warn('[Role] Queued refresh deferred:',err?.message||err));}});
@@ -7006,6 +7170,324 @@ img{height:auto}
 /* Keep image decoding and painting from competing with the first visible content. */
 #products .product-image img,#recentProducts .product-image img{backface-visibility:hidden}
 @media(prefers-reduced-motion:reduce){#products .product-image img,#recentProducts .product-image img{transition:none!important}}
+</style>
+
+<style id="ao-device-manager-styles">
+#aoDeviceManager{margin:28px 0 32px;padding:0;border-top:1px solid var(--line);color:var(--ink)}
+#aoDeviceManager .ao-device-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 0 16px}
+#aoDeviceManager h3{margin:3px 0 5px;font-size:clamp(19px,2vw,24px);letter-spacing:-.045em;font-weight:650}
+#aoDeviceManager p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
+#aoDeviceManager .ao-device-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:4px 0 17px}
+#aoDeviceManager .ao-device-stats article{min-width:0;padding:14px 15px;border:1px solid var(--line);border-radius:12px;background:var(--panel);display:flex;flex-direction:column;gap:8px}
+#aoDeviceManager .ao-device-stats span{font-size:10px;color:var(--muted);letter-spacing:.035em}
+#aoDeviceManager .ao-device-stats strong{font-size:24px;line-height:1;font-weight:650;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+#aoDeviceManager .ao-device-toolbar{display:flex;gap:9px;margin:0 0 12px}
+#aoDeviceManager .ao-device-search{display:flex;align-items:center;gap:9px;flex:1;min-width:0;padding:0 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--muted)}
+#aoDeviceManager .ao-device-search svg{width:15px;height:15px;flex:0 0 15px}
+#aoDeviceManager .ao-device-search input{width:100%;min-width:0;border:0!important;outline:0!important;background:transparent!important;color:var(--ink)!important;padding:11px 0!important;font:inherit;font-size:11px}
+#aoDeviceManager .ao-device-toolbar select{min-width:135px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink);padding:0 10px;font:inherit;font-size:11px}
+#aoDeviceManager .ao-device-message{font-size:11px;color:var(--muted);padding:9px 0}
+#aoDeviceManager .ao-device-table-wrap{width:100%;overflow:auto;border:1px solid var(--line);border-radius:11px;background:var(--panel)}
+#aoDeviceManager .ao-device-table{width:100%;border-collapse:collapse;min-width:680px;text-align:left}
+#aoDeviceManager .ao-device-table th{padding:11px 12px;background:var(--soft);font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:650;white-space:nowrap}
+#aoDeviceManager .ao-device-table td{padding:12px;border-top:1px solid var(--line);font-size:10px;vertical-align:middle;color:var(--ink)}
+#aoDeviceManager .ao-device-identity{display:flex;align-items:center;gap:10px;min-width:190px}
+#aoDeviceManager .ao-device-icon{width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--line);border-radius:9px;background:var(--soft);flex:0 0 34px}
+#aoDeviceManager .ao-device-icon svg{width:17px;height:17px}
+#aoDeviceManager .ao-device-identity b{display:block;font-size:11px;font-weight:650;overflow-wrap:anywhere}
+#aoDeviceManager .ao-device-identity small{display:block;margin-top:3px;color:var(--muted);font-size:9px;overflow-wrap:anywhere}
+#aoDeviceManager .ao-device-state{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:10px;color:var(--muted)}
+#aoDeviceManager .ao-device-state:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+#aoDeviceManager .ao-device-state.online{color:#198754}#aoDeviceManager .ao-device-state.idle{color:#b7791f}#aoDeviceManager .ao-device-state.revoked{color:#b42318}
+#aoDeviceManager .ao-device-action{border:1px solid var(--line);border-radius:7px;background:transparent;color:var(--ink);padding:7px 9px;font:inherit;font-size:9px;white-space:nowrap;cursor:pointer}
+#aoDeviceManager .ao-device-action:hover{border-color:var(--ink)}
+#aoDeviceManager .ao-device-action.danger{color:#b42318;border-color:color-mix(in srgb,#b42318 35%,var(--line))}
+#aoDeviceManager .ao-device-mobile-list{display:none}
+#aoDeviceManager .ao-device-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;color:var(--muted);font-size:10px}
+#aoDeviceManager .ao-device-empty{padding:25px 12px!important;text-align:center;color:var(--muted)!important}
+@media(max-width:680px){#aoDeviceManager .ao-device-stats{gap:7px}#aoDeviceManager .ao-device-stats article{padding:11px 10px}#aoDeviceManager .ao-device-stats strong{font-size:21px}#aoDeviceManager .ao-device-table-wrap{display:none}#aoDeviceManager .ao-device-mobile-list{display:grid;gap:8px}#aoDeviceManager .ao-device-mobile-card{padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}#aoDeviceManager .ao-device-mobile-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}#aoDeviceManager .ao-device-mobile-meta{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0;color:var(--muted);font-size:9px}#aoDeviceManager .ao-device-mobile-meta b{display:block;color:var(--ink);font-size:10px;font-weight:550;margin-top:3px;overflow-wrap:anywhere}#aoDeviceManager .ao-device-toolbar select{min-width:112px;max-width:40%}#aoDeviceManager .ao-device-head{align-items:center}}
+@media(max-width:380px){#aoDeviceManager .ao-device-stats span{font-size:9px}#aoDeviceManager .ao-device-stats strong{font-size:19px}#aoDeviceManager .ao-device-head p{font-size:10px}#aoDeviceManager .ao-device-footer{align-items:flex-start;flex-direction:column}}
+</style>
+<style id="ao-device-manager-polish">
+#aoDeviceManager .ao-device-controls{display:flex;align-items:center;margin:0 0 12px;min-width:0}
+#aoDeviceManager .ao-device-search{display:flex;align-items:center;gap:10px;width:100%;min-width:0;min-height:44px;padding:0 13px;border:1px solid var(--line);border-radius:var(--radius,10px);background:var(--panel);color:var(--muted);transition:border-color .18s,box-shadow .18s}
+#aoDeviceManager .ao-device-search:focus-within{border-color:var(--ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--ink) 9%,transparent)}
+#aoDeviceManager .ao-device-search input{width:100%;min-width:0;min-height:42px;border:0!important;outline:0!important;background:transparent!important;color:var(--ink)!important;box-shadow:none!important;font:inherit;font-size:13px}
+#aoDeviceManager .ao-device-search input::placeholder{color:var(--muted);opacity:.8}
+#aoDeviceManager .ao-device-tabs{display:flex;align-items:center;gap:5px;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin;padding:2px 1px 10px;margin:0 0 10px;border-bottom:1px solid var(--line);-webkit-overflow-scrolling:touch}
+#aoDeviceManager .ao-device-tabs button{display:inline-flex;align-items:center;justify-content:center;gap:7px;flex:0 0 auto;min-height:36px;padding:7px 11px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted);font:inherit;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer;transition:background .18s,color .18s,border-color .18s}
+#aoDeviceManager .ao-device-tabs button:hover{background:var(--soft);color:var(--ink)}
+#aoDeviceManager .ao-device-tabs button.is-active{background:var(--soft);border-color:var(--line);color:var(--ink)}
+#aoDeviceManager .ao-device-tabs button span{display:inline-grid;place-items:center;min-width:19px;height:19px;padding:0 5px;border-radius:6px;background:var(--bg);color:var(--muted);font-size:10px;font-variant-numeric:tabular-nums}
+#aoDeviceManager .ao-device-tabs button.is-active span{background:var(--ink);color:var(--bg)}
+#aoDeviceManager .ao-device-eye{display:inline-grid;place-items:center;width:34px;height:34px;padding:7px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--muted);cursor:pointer;transition:background .18s,color .18s,border-color .18s}
+#aoDeviceManager .ao-device-eye:hover{background:var(--soft);border-color:var(--ink);color:var(--ink)}
+#aoDeviceManager .ao-device-eye svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#aoDeviceManager .ao-device-mobile-actions{display:flex;justify-content:flex-end;margin-top:8px}
+#aoDeviceManager .ao-device-state.revoked{background:var(--soft);color:var(--muted);border:1px solid var(--line)}
+@media(max-width:680px){#aoDeviceManager .ao-device-tabs{gap:4px;margin-right:-2px}#aoDeviceManager .ao-device-tabs button{min-height:35px;padding:7px 9px;font-size:11px}#aoDeviceManager .ao-device-search{min-height:43px}#aoDeviceManager .ao-device-mobile-actions{margin-top:10px}}
+@media(max-width:360px){#aoDeviceManager .ao-device-stats{grid-template-columns:repeat(3,minmax(0,1fr))}#aoDeviceManager .ao-device-stats article{padding:9px 7px}#aoDeviceManager .ao-device-tabs button{padding-inline:8px}}
+@media(prefers-reduced-motion:reduce){#aoDeviceManager .ao-device-tabs button,#aoDeviceManager .ao-device-eye,#aoDeviceManager .ao-device-search{transition:none}}
+</style>
+<script id="ao-device-manager-runtime">
+(()=>{
+ 'use strict';
+ if(window.__AO_DEVICE_MANAGER__)return;window.__AO_DEVICE_MANAGER__=true;
+ const $=s=>document.querySelector(s), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const root=$('#aoDeviceManager');if(!root)return;
+ const dbReady=()=>window.ajaySupabase&&window.aoSupabaseReady;
+ let sessions=[],busy=false,heartbeatTimer=null,pollTimer=null,activeFilter='all';
+ const hiddenKey='ao_device_hidden_sessions_v1';
+ const readHidden=()=>{try{return new Set(JSON.parse(localStorage.getItem(hiddenKey)||'[]'))}catch(_){return new Set()}};
+ let hiddenSessions=readHidden();
+ const saveHidden=()=>{try{localStorage.setItem(hiddenKey,JSON.stringify([...hiddenSessions]))}catch(_){}};
+ const eyeIcon=hidden=>hidden?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.2A11.5 11.5 0 0 1 12 5c5.2 0 8.8 4.5 9.8 6.5a1.2 1.2 0 0 1 0 1c-.4.8-1.2 1.9-2.4 3M6.2 6.2c-2 1.4-3.4 3.5-4 5.3a1.2 1.2 0 0 0 0 1C3.2 14.5 6.8 19 12 19c1.1 0 2.1-.2 3-.6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.2 12s3.5-7 9.8-7 9.8 7 9.8 7-3.5 7-9.8 7-9.8-7-9.8-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+
+ const newDeviceId=()=>{try{return crypto.randomUUID?crypto.randomUUID():('ao-'+Date.now()+'-'+Math.random().toString(36).slice(2))}catch(_){return 'ao-'+Date.now()+'-'+Math.random().toString(36).slice(2)}};let deviceId=(()=>{try{let v=localStorage.getItem('ao_device_session_id');if(!v){v=newDeviceId();localStorage.setItem('ao_device_session_id',v)}return v}catch(_){return newDeviceId()}})();
+ const ua=navigator.userAgent||'';
+ function device(){let os=/iPhone|iPad|iPod/.test(ua)?'iOS':/Android/.test(ua)?'Android':/Windows/.test(ua)?'Windows':/Mac OS/.test(ua)?'macOS':/Linux/.test(ua)?'Linux':'Unknown OS';let browser=/Edg\//.test(ua)?'Edge':/Firefox\//.test(ua)?'Firefox':/CriOS\//.test(ua)?'Chrome iOS':/Chrome\//.test(ua)?'Chrome':/Safari\//.test(ua)&&!/Chrome|CriOS/.test(ua)?'Safari':'Browser';let kind=/iPhone|Android.*Mobile|Mobile/.test(ua)?'Mobile':/iPad|Tablet/.test(ua)?'Tablet':'Desktop';return {device_name:kind+' · '+os,browser_name:browser,os_name:os,user_agent:ua.slice(0,500)}}
+ function state(s){if(s.revoked_at)return 'revoked';let age=Date.now()-new Date(s.last_seen||0).getTime();return age<90000?'online':age<300000?'idle':'offline'}
+ function ago(v){if(!v)return '—';let d=Math.max(0,Date.now()-new Date(v).getTime());if(d<60000)return 'Just now';if(d<3600000)return Math.floor(d/60000)+'m ago';if(d<86400000)return Math.floor(d/3600000)+'h ago';return new Date(v).toLocaleString()}
+ function notice(msg,error=false){const el=$('#aoDeviceMessage');if(el){el.textContent=msg;el.style.color=error?'#b42318':''}}
+ async function client(){await window.aoSupabaseReady;return window.ajaySupabase||null}
+ async function currentUser(){const c=await client();if(!c)return null;const {data,error}=await c.auth.getUser();if(error||!data?.user)return null;return data.user}
+ async function isAdmin(c,u){if(!u)return false;const {data,error}=await c.from('ao_user_roles').select('role').eq('user_id',u.id).maybeSingle();return !error&&String(data?.role||'').trim().toLowerCase()==='admin'}
+ async function heartbeat(){
+  const c=await client();if(!c)return;
+  const {data}=await c.auth.getSession();if(!data?.session?.access_token)return;
+  const send=()=>c.functions.invoke('ao-device-session',{body:{action:'heartbeat',session_id:deviceId,...device()}});
+  const rotateId=()=>{deviceId=newDeviceId();try{localStorage.setItem('ao_device_session_id',deviceId)}catch(_){}};
+  try{
+   let result=await send();
+   if(result.error){
+    const status=result.error?.context?.status;
+    if(status===409){rotateId();result=await send();}
+    if(result.error)throw result.error;
+   }
+   let r=result.data;
+   // A 200 response with rotate_session handles an ID left by another account in this browser.
+   if(r?.rotate_session){rotateId();result=await send();if(result.error)throw result.error;r=result.data;}
+   if(r?.revoked){notice('This device session has been revoked. Signing out…',true);rotateId();await c.auth.signOut();return;}
+  }catch(e){console.warn('[Device manager] Heartbeat unavailable:',e?.message||e)}
+ }
+ function render(){
+  const q=($('#aoDeviceSearch')?.value||'').trim().toLowerCase();
+  const visible=sessions.filter(s=>!hiddenSessions.has(s.session_id));
+  const revoked=sessions.filter(s=>!!s.revoked_at);
+  const countFor=k=>k==='all'?visible.length:k==='hidden'?revoked.filter(s=>hiddenSessions.has(s.session_id)).length:visible.filter(s=>state(s)===k).length;
+  const counts={all:countFor('all'),online:countFor('online'),idle:countFor('idle'),offline:countFor('offline'),revoked:countFor('revoked'),hidden:countFor('hidden')};
+  Object.entries({aoDeviceTabAll:counts.all,aoDeviceTabOnline:counts.online,aoDeviceTabIdle:counts.idle,aoDeviceTabOffline:counts.offline,aoDeviceTabRevoked:counts.revoked,aoDeviceTabHidden:counts.hidden}).forEach(([id,v])=>{const el=$('#'+id);if(el)el.textContent=v});
+  root.querySelectorAll('[data-device-filter]').forEach(b=>{const on=b.dataset.deviceFilter===activeFilter;b.classList.toggle('is-active',on);b.setAttribute('aria-selected',String(on))});
+  let base=activeFilter==='hidden'?sessions.filter(s=>hiddenSessions.has(s.session_id)):sessions.filter(s=>!hiddenSessions.has(s.session_id)&&(activeFilter==='all'||(activeFilter==='revoked'?!!s.revoked_at:state(s)===activeFilter)));
+  const rows=base.filter(s=>[s.email,s.display_name,s.role,s.device_name,s.browser_name,s.os_name,s.ip_address].join(' ').toLowerCase().includes(q));
+  const online=sessions.filter(s=>state(s)==='online').length,active=sessions.filter(s=>!s.revoked_at).length,accounts=new Set(sessions.filter(s=>!s.revoked_at).map(s=>s.user_id)).size;
+  [['aoDeviceOnline',online],['aoDeviceActive',active],['aoDeviceAccounts',accounts],['aoDeviceCount',rows.length+' sessions']].forEach(([id,v])=>{const el=$('#'+id);if(el)el.textContent=v});
+  const deviceIcon=s=>/mobile|tablet/i.test(s.device_name||'')?'<rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M10 18.5h4"/>':'<rect x="2.5" y="3.5" width="19" height="13" rx="1.5"/><path d="M8 20.5h8M12 16.5v4"/>';
+  const action=s=>s.revoked_at?`<button type="button" class="ao-device-eye" data-ao-toggle-hidden="${esc(s.session_id)}" aria-label="${hiddenSessions.has(s.session_id)?'Unhide':'Hide'} revoked session" title="${hiddenSessions.has(s.session_id)?'Unhide session':'Hide session'}">${eyeIcon(hiddenSessions.has(s.session_id))}</button>`:`<button class="ao-device-action danger" data-ao-revoke="${esc(s.session_id)}">Revoke</button>`;
+  const label=s=>state(s)[0].toUpperCase()+state(s).slice(1);
+  const identity=s=>`<div class="ao-device-identity"><span class="ao-device-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">${deviceIcon(s)}</svg></span><span><b>${esc(s.display_name||s.email||'Account')}</b><small>${esc(s.email||'')} · ${esc(s.device_name||'Device')} · ${esc(s.browser_name||'Browser')} · ${esc(s.role||'user')}</small></span></div>`;
+  $('#aoDeviceRows').innerHTML=rows.map(s=>`<tr><td>${identity(s)}</td><td>${esc(s.ip_address||'Not available')}</td><td>${esc(ago(s.created_at))}</td><td>${esc(ago(s.last_seen))}</td><td><span class="ao-device-state ${state(s)}">${label(s)}</span></td><td>${action(s)}</td></tr>`).join('')||'<tr><td colspan="6" class="ao-device-empty">No matching device sessions</td></tr>';
+  $('#aoDeviceMobileRows').innerHTML=rows.map(s=>`<article class="ao-device-mobile-card"><div class="ao-device-mobile-top">${identity(s)}<span class="ao-device-state ${state(s)}">${label(s)}</span></div><div class="ao-device-mobile-meta"><span>IP address<b>${esc(s.ip_address||'Not available')}</b></span><span>Last seen<b>${esc(ago(s.last_seen))}</b></span><span>Role<b>${esc(s.role||'user')}</b></span><span>Signed in<b>${esc(ago(s.created_at))}</b></span></div><div class="ao-device-mobile-actions">${action(s)}</div></article>`).join('')||'<div class="ao-device-empty">No matching device sessions</div>';
+ }
+
+ async function load(){if(busy)return;busy=true;try{const c=await client(),u=await currentUser();if(!c||!u){notice('Sign in with an administrator account to view device sessions.',true);return}if(!await isAdmin(c,u)){notice('Administrator access is required.',true);return}const {data,error}=await c.from('ao_device_sessions').select('session_id,user_id,email,display_name,role,device_name,browser_name,os_name,ip_address,created_at,last_seen,revoked_at').order('last_seen',{ascending:false}).limit(500);if(error)throw error;sessions=data||[];notice('Device activity updated · '+new Date().toLocaleTimeString());render()}catch(e){notice(e?.message?.includes('ao_device_sessions')?'Device Manager database setup is required. Run the supplied SQL setup file in Supabase first.':(e?.message||'Could not load device sessions.'),true)}finally{busy=false}}
+ async function revoke(id){if(!id||!confirm('Revoke this device session? The device will be signed out when it next checks in.'))return;try{const c=await client(),u=await currentUser();if(!c||!await isAdmin(c,u))throw Error('Administrator access required.');const {error}=await c.from('ao_device_sessions').update({revoked_at:new Date().toISOString(),revoked_by:u.id}).eq('session_id',id).is('revoked_at',null);if(error)throw error;notice('Session revoked.');await load()}catch(e){notice(e?.message||'Could not revoke this session.',true)}}
+ root.addEventListener('click',e=>{const hide=e.target.closest('[data-ao-toggle-hidden]');if(hide){const id=hide.getAttribute('data-ao-toggle-hidden');if(hiddenSessions.has(id))hiddenSessions.delete(id);else hiddenSessions.add(id);saveHidden();render();return}const b=e.target.closest('[data-ao-revoke]');if(b)revoke(b.getAttribute('data-ao-revoke'))});
+ root.querySelector('#aoDeviceTabs')?.addEventListener('click',e=>{const b=e.target.closest('[data-device-filter]');if(!b)return;activeFilter=b.dataset.deviceFilter;render()});
+ $('#aoDeviceRefresh')?.addEventListener('click',load);$('#aoDeviceSearch')?.addEventListener('input',render);
+ $('#aoDeviceRevokeAll')?.addEventListener('click',async()=>{if(!confirm('Revoke every active session except the device you are using?'))return;try{const c=await client(),u=await currentUser();if(!c||!await isAdmin(c,u))throw Error('Administrator access required.');const {error}=await c.from('ao_device_sessions').update({revoked_at:new Date().toISOString(),revoked_by:u.id}).neq('session_id',deviceId).is('revoked_at',null);if(error)throw error;notice('All other active sessions have been revoked.');await load()}catch(e){notice(e?.message||'Could not revoke sessions.',true)}});
+ document.addEventListener('click',e=>{if(e.target.closest('#adminLink'))setTimeout(()=>{if($('#adminModal')?.classList.contains('show'))load()},250)});
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden){heartbeat();if($('#adminModal')?.classList.contains('show'))load()}});
+ window.addEventListener('focus',()=>{heartbeat();if($('#adminModal')?.classList.contains('show'))load()});
+ (async()=>{await heartbeat();heartbeatTimer=setInterval(heartbeat,45000);pollTimer=setInterval(()=>{if($('#adminModal')?.classList.contains('show'))load()},30000)})();
+})();
+</script>
+
+
+<style id="ao-smart-overflow-hamburger-v2">
+/* Show the hamburger only when the primary navigation cannot fit. */
+header.header .nav #mobileMenuBtn{display:none!important;flex:0 0 28px!important;width:28px!important;min-width:28px!important;height:28px!important;min-height:28px!important;margin:0 0 0 3px!important;padding:0!important;border:0!important;border-radius:50%!important;background:transparent!important;box-shadow:none!important;color:var(--ink)!important;place-items:center!important;line-height:1!important}
+header.header .nav #mobileMenuBtn .ao-ui-icon{display:block!important;width:16px!important;height:16px!important;max-width:16px!important;max-height:16px!important;stroke:currentColor!important;fill:none!important}
+header.header.ao-nav-needs-menu .nav #mobileMenuBtn{display:grid!important}
+header.header.ao-nav-needs-menu .nav{flex-wrap:wrap!important;row-gap:0!important}
+header.header.ao-nav-needs-menu .nav #primaryNav.mobile-open{display:flex!important;order:8!important;flex:0 0 100%!important;width:100%!important;max-width:100%!important;min-width:0!important;flex-direction:column!important;align-items:stretch!important;gap:0!important;margin:8px 0 10px!important;padding:8px 0!important;border-top:1px solid var(--line)!important;background:var(--bg)!important;overflow:visible!important}
+header.header.ao-nav-needs-menu .nav #primaryNav.mobile-open a{display:flex!important;align-items:center!important;justify-content:flex-start!important;width:100%!important;min-height:42px!important;padding:11px 14px!important;margin:0!important;border:0!important;border-bottom:1px solid var(--line)!important;border-radius:0!important;background:var(--panel)!important;color:var(--ink)!important;white-space:normal!important}
+header.header.ao-nav-needs-menu .nav #primaryNav.mobile-open a:last-child{border-bottom:0!important}
+@media(max-width:420px){header.header.ao-nav-needs-menu .nav #mobileMenuBtn{flex-basis:24px!important;width:24px!important;min-width:24px!important;height:24px!important;min-height:24px!important;margin-left:1px!important}header.header.ao-nav-needs-menu .nav #mobileMenuBtn .ao-ui-icon{width:14px!important;height:14px!important}}
+</style>
+<script id="ao-smart-overflow-hamburger-controller-v2">
+(()=>{
+ const header=document.querySelector('header.header');
+ const nav=header?.querySelector('.nav');
+ const menu=document.getElementById('mobileMenuBtn');
+ const links=document.getElementById('primaryNav');
+ if(!header||!nav||!menu||!links||menu.dataset.aoSmartMenuBound==='1')return;
+ menu.dataset.aoSmartMenuBound='1';
+ const icon='<svg class="ao-ui-icon ao-menu-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
+ const isSmall=()=>window.matchMedia('(max-width: 620px)').matches;
+ const needsMenu=()=>{
+   if(isSmall())return true;
+   const items=[...links.querySelectorAll('a')];
+   if(!items.length)return false;
+   const hidden=items.some(a=>{const s=getComputedStyle(a);return s.display==='none'||s.visibility==='hidden'||a.getClientRects().length===0;});
+   if(hidden)return true;
+   const navStyle=getComputedStyle(links);
+   if(navStyle.display==='none')return true;
+   const navOverflow=links.scrollWidth>links.clientWidth+2;
+   const headerOverflow=nav.scrollWidth>nav.clientWidth+2;
+   return navOverflow||headerOverflow;
+ };
+ const close=()=>{
+   links.classList.remove('mobile-open');
+   nav.classList.remove('ao-nav-menu-open');
+   header.classList.remove('ao-nav-menu-expanded');
+   menu.setAttribute('aria-expanded','false');
+   menu.setAttribute('aria-label','Open navigation menu');
+   menu.setAttribute('title','Open menu');
+   menu.innerHTML=icon;
+ };
+ const refresh=()=>{
+   const required=needsMenu();
+   header.classList.toggle('ao-nav-needs-menu',required);
+   if(!required){close();header.classList.remove('ao-nav-menu-expanded');}
+ };
+ const open=()=>{
+   links.classList.add('mobile-open');
+   nav.classList.add('ao-nav-menu-open');
+   header.classList.add('ao-nav-menu-expanded');
+   menu.setAttribute('aria-expanded','true');
+   menu.setAttribute('aria-label','Close navigation menu');
+   menu.setAttribute('title','Close menu');
+   menu.innerHTML='×';
+ };
+ // The existing, site-native menu click handler remains the single toggle controller.
+ // Selecting any destination closes the hamburger automatically.
+ links.addEventListener('click',event=>{
+   if(event.target.closest('a'))close();
+ });
+ document.addEventListener('click',event=>{
+   if(links.classList.contains('mobile-open')&&!nav.contains(event.target))close();
+ });
+ document.addEventListener('keydown',event=>{if(event.key==='Escape')close();});
+ let raf=0;
+ const schedule=()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(refresh);};
+ window.addEventListener('resize',schedule,{passive:true});
+ window.addEventListener('orientationchange',schedule,{passive:true});
+ if('ResizeObserver' in window){const observer=new ResizeObserver(schedule);observer.observe(nav);observer.observe(header);}
+ if(document.fonts?.ready)document.fonts.ready.then(schedule).catch(()=>{});
+ refresh();
+})();
+</script>
+<style id="ao-compact-single-row-header-v3">
+/* Keep every header control on one line; the navigation opens as an overlay, never as a second header row. */
+@media(max-width:1360px){
+  header.header .wrap.nav{position:relative!important;display:flex!important;flex-wrap:nowrap!important;align-items:center!important;white-space:nowrap!important;row-gap:0!important;min-width:0!important;overflow:visible!important;}
+  header.header .logo-brand{flex:0 1 auto!important;min-width:0!important;max-width:none!important;white-space:nowrap!important;}
+  header.header .actions{display:flex!important;flex:0 1 auto!important;min-width:0!important;max-width:none!important;flex-wrap:nowrap!important;white-space:nowrap!important;gap:clamp(0px,.35vw,3px)!important;margin-left:auto!important;}
+  header.header .actions>.iconbtn,header.header .actions>.ao-header-logout,#aoAccountActions .ao-account-action{flex:0 1 clamp(16px,5.6vw,24px)!important;width:clamp(16px,5.6vw,24px)!important;min-width:16px!important;height:clamp(18px,5.8vw,25px)!important;min-height:18px!important;padding:0!important;}
+  header.header .actions>.iconbtn>svg,#aoAccountActions .ao-account-action>.ao-ui-icon,header.header .actions>.ao-header-logout>svg{width:clamp(9px,3.1vw,14px)!important;height:clamp(9px,3.1vw,14px)!important;max-width:14px!important;max-height:14px!important;flex:0 1 auto!important;}
+  header.header #aoAccountActions{display:inline-flex!important;flex:0 1 auto!important;min-width:0!important;gap:clamp(0px,.25vw,2px)!important;white-space:nowrap!important;}
+  header.header .nav #mobileMenuBtn{flex:0 0 clamp(18px,5.8vw,24px)!important;width:clamp(18px,5.8vw,24px)!important;min-width:18px!important;height:clamp(18px,5.8vw,24px)!important;min-height:18px!important;margin:0 0 0 2px!important;}
+  header.header .nav #mobileMenuBtn .ao-ui-icon{width:clamp(10px,3.2vw,14px)!important;height:clamp(10px,3.2vw,14px)!important;}
+  header.header .nav.ao-nav-menu-open{flex-wrap:nowrap!important;row-gap:0!important;}
+  header.header .nav #primaryNav.mobile-open{position:absolute!important;z-index:1200!important;top:calc(100% + 7px)!important;right:12px!important;left:auto!important;display:flex!important;flex:0 0 auto!important;width:min(270px,calc(100vw - 24px))!important;max-width:calc(100vw - 24px)!important;max-height:min(70vh,520px)!important;overflow-y:auto!important;overscroll-behavior:contain!important;box-sizing:border-box!important;flex-direction:column!important;align-items:stretch!important;gap:0!important;margin:0!important;padding:7px 0!important;border:1px solid var(--line)!important;border-radius:12px!important;background:var(--panel)!important;box-shadow:0 14px 36px rgba(0,0,0,.16)!important;}
+  header.header .nav #primaryNav.mobile-open a{display:flex!important;width:100%!important;min-height:40px!important;box-sizing:border-box!important;padding:10px 14px!important;border:0!important;border-bottom:1px solid var(--line)!important;background:transparent!important;white-space:normal!important;}
+  header.header .nav #primaryNav.mobile-open a:last-child{border-bottom:0!important;}
+}
+@media(max-width:390px){
+  header.header .wrap.nav{column-gap:2px!important;}
+  header.header .logo-brand{gap:3px!important;}
+  header.header .logo-brand img{width:clamp(20px,6.2vw,24px)!important;height:clamp(20px,6.2vw,24px)!important;}
+  header.header .logo-brand span{font-size:clamp(7px,2.35vw,9px)!important;letter-spacing:-.025em!important;}
+  header.header .actions{gap:0!important;}
+  header.header .actions>.iconbtn,header.header .actions>.ao-header-logout,#aoAccountActions .ao-account-action{flex-basis:16px!important;width:16px!important;min-width:16px!important;height:19px!important;}
+  header.header .actions>.iconbtn>svg,#aoAccountActions .ao-account-action>.ao-ui-icon,header.header .actions>.ao-header-logout>svg{width:10px!important;height:10px!important;}
+  header.header .nav #mobileMenuBtn{flex-basis:18px!important;width:18px!important;min-width:18px!important;height:19px!important;min-height:19px!important;margin-left:1px!important;}
+  header.header .nav #mobileMenuBtn .ao-ui-icon{width:11px!important;height:11px!important;}
+}
+@media(max-width:340px){
+  header.header .logo-brand img{width:19px!important;height:19px!important;}
+  header.header .logo-brand span{font-size:7px!important;}
+  header.header .actions>.iconbtn,header.header .actions>.ao-header-logout,#aoAccountActions .ao-account-action{flex-basis:15px!important;width:15px!important;min-width:15px!important;}
+  header.header .actions>.iconbtn>svg,#aoAccountActions .ao-account-action>.ao-ui-icon,header.header .actions>.ao-header-logout>svg{width:9px!important;height:9px!important;}
+}
+</style>
+<script id="ao-button-arrow-cleanup-v1">
+(()=>{
+ const arrowOnly=/^[\s\u00a0]*(?:↗︎?|↘︎?|→|←|➜|➝|➤|⟶|⇢|›|»)[\s\u00a0]*$/u;
+ const trailing=/[\s\u00a0]*(?:↗︎?|↘︎?|→|←|➜|➝|➤|⟶|⇢|›|»)[\s\u00a0]*$/u;
+ const cleanButton=(button)=>{
+   if(!button||button.dataset.aoArrowCleaned==='1')return;
+   button.dataset.aoArrowCleaned='1';
+   const walker=document.createTreeWalker(button,NodeFilter.SHOW_TEXT);
+   const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+   for(const node of nodes){
+     if(arrowOnly.test(node.nodeValue||'')){node.remove();continue;}
+     if(trailing.test(node.nodeValue||''))node.nodeValue=node.nodeValue.replace(trailing,'').trimEnd();
+   }
+   button.querySelectorAll('span, i, em').forEach(el=>{if(arrowOnly.test(el.textContent||''))el.remove();});
+ };
+ const scan=(root)=>{if(root.nodeType===1&&root.matches?.('button'))cleanButton(root);root.querySelectorAll?.('button').forEach(cleanButton);};
+ scan(document);
+ const observer=new MutationObserver(records=>{for(const record of records){if(record.type==='childList'){record.addedNodes.forEach(scan);const b=record.target.nodeType===1?record.target.closest?.('button'):null;if(b){b.dataset.aoArrowCleaned='';cleanButton(b);}}else if(record.type==='characterData'){const b=record.target.parentElement?.closest('button');if(b){b.dataset.aoArrowCleaned='';cleanButton(b);}}}});
+ observer.observe(document.documentElement,{subtree:true,childList:true,characterData:true});
+})();
+</script>
+
+
+<style id="ao-header-icons-uniform-instant-v1">
+/* Normalize every header action and its SVG box so icons paint at the same time and size. */
+.header .nav{align-items:center!important}
+.header .actions{display:flex!important;align-items:center!important;flex-wrap:nowrap!important}
+.header .actions>.iconbtn,
+.header .actions>.ao-header-logout,
+#aoAccountActions .ao-account-action,
+.header .mobile-menu,
+.header .actions>.ao-seller-top-bell{
+  box-sizing:border-box!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;
+  flex:0 0 36px!important;width:36px!important;min-width:36px!important;height:36px!important;min-height:36px!important;
+  padding:0!important;line-height:1!important;vertical-align:middle!important;
+}
+.header .actions>.iconbtn>svg,
+.header .actions>.ao-header-logout>svg,
+#aoAccountActions .ao-account-action>.ao-ui-icon,
+.header .mobile-menu>.ao-ui-icon,
+.header .actions>.ao-seller-top-bell>.ao-ui-icon{
+  display:block!important;box-sizing:content-box!important;width:17px!important;height:17px!important;
+  min-width:17px!important;min-height:17px!important;max-width:17px!important;max-height:17px!important;
+  flex:0 0 17px!important;margin:0!important;opacity:1!important;visibility:visible!important;
+}
+.header .actions>.iconbtn svg:not(.count),#aoAccountActions .ao-account-action svg,.header .mobile-menu svg{overflow:visible!important}
+.header .actions>.iconbtn .count{display:grid!important}
+#aoAccountActions[hidden]{display:none!important}
+@media(max-width:760px){
+ .header .actions{gap:clamp(2px,.7vw,5px)!important}
+ .header .actions>.iconbtn,.header .actions>.ao-header-logout,#aoAccountActions .ao-account-action,.header .mobile-menu,.header .actions>.ao-seller-top-bell{
+  flex-basis:30px!important;width:30px!important;min-width:30px!important;height:30px!important;min-height:30px!important;border-radius:8px!important
+ }
+ .header .actions>.iconbtn>svg,.header .actions>.ao-header-logout>svg,#aoAccountActions .ao-account-action>.ao-ui-icon,.header .mobile-menu>.ao-ui-icon,.header .actions>.ao-seller-top-bell>.ao-ui-icon{
+  width:15px!important;height:15px!important;min-width:15px!important;min-height:15px!important;max-width:15px!important;max-height:15px!important;flex-basis:15px!important
+ }
+}
+@media(max-width:420px){
+ .header .actions{gap:2px!important}
+ .header .actions>.iconbtn,.header .actions>.ao-header-logout,#aoAccountActions .ao-account-action,.header .mobile-menu,.header .actions>.ao-seller-top-bell{
+  flex-basis:27px!important;width:27px!important;min-width:27px!important;height:27px!important;min-height:27px!important;border-radius:7px!important
+ }
+ .header .actions>.iconbtn>svg,.header .actions>.ao-header-logout>svg,#aoAccountActions .ao-account-action>.ao-ui-icon,.header .mobile-menu>.ao-ui-icon,.header .actions>.ao-seller-top-bell>.ao-ui-icon{
+  width:14px!important;height:14px!important;min-width:14px!important;min-height:14px!important;max-width:14px!important;max-height:14px!important;flex-basis:14px!important
+ }
+}
+@media(max-width:360px){
+ .header .actions{gap:1px!important}
+ .header .actions>.iconbtn,.header .actions>.ao-header-logout,#aoAccountActions .ao-account-action,.header .mobile-menu,.header .actions>.ao-seller-top-bell{
+  flex-basis:24px!important;width:24px!important;min-width:24px!important;height:24px!important;min-height:24px!important;border-radius:6px!important
+ }
+ .header .actions>.iconbtn>svg,.header .actions>.ao-header-logout>svg,#aoAccountActions .ao-account-action>.ao-ui-icon,.header .mobile-menu>.ao-ui-icon,.header .actions>.ao-seller-top-bell>.ao-ui-icon{
+  width:12px!important;height:12px!important;min-width:12px!important;min-height:12px!important;max-width:12px!important;max-height:12px!important;flex-basis:12px!important
+ }
+}
+@media(prefers-reduced-motion:reduce){.header .actions>.iconbtn,.header .mobile-menu,#aoAccountActions .ao-account-action{transition:none!important}}
 </style>
 </body>
 <!-- AjayOutfits VERSION 95: admin can permanently delete approved or rejected reviews; existing theme tokens and typography retained. -->
