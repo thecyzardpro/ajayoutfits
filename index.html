@@ -7,9 +7,12 @@
  const readCachedRole=id=>{try{const r=localStorage.getItem(cacheKey(id));return ['customer','seller','admin'].includes(r)?r:''}catch(_){return ''}};
  const apply=(id)=>{const role=readCachedRole(id);const root=document.documentElement;root.dataset.aoRoleFast=role||'unknown';root.dataset.aoRoleFastUser=String(id||'');};
  try{
-  let userId='';
-  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(!k||!k.endsWith('-auth-token'))continue;try{const v=JSON.parse(localStorage.getItem(k)||'null');const u=v?.user||v?.currentSession?.user||v?.session?.user;if(u?.id){userId=String(u.id);break}}catch(_){}}
+  let userId='',hasAuthToken=false;
+  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(!k||!k.endsWith('-auth-token'))continue;hasAuthToken=true;try{const v=JSON.parse(localStorage.getItem(k)||'null');const u=v?.user||v?.currentSession?.user||v?.session?.user;if(u?.id){userId=String(u.id);break}}catch(_){}}
   apply(userId);
+  // Public visitors are customer-level by default, so the shopping icons render on first paint.
+  // If an auth token exists but its user cannot be read yet, keep the safe unknown state until verified.
+  if(!hasAuthToken&&!userId){document.documentElement.dataset.aoRoleFast='customer';document.documentElement.dataset.aoRoleFastUser='';}
  }catch(_){apply('')}
  window.addEventListener('ao:auth-change',e=>{const id=String(e?.detail?.user?.id||'');apply(id)});
  window.addEventListener('ao:role-reset',()=>apply(''));
@@ -1350,7 +1353,7 @@ html[data-theme="dark"] #aoPasswordChangePanel .ao-password-change-actions .btn.
 .ao-seller-applications-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 10px}
 .ao-seller-applications-head h3{margin:0}
 .ao-seller-applications-live{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:11px;font-weight:650;white-space:nowrap}
-.ao-seller-applications-live i{width:7px;height:7px;border-radius:50%;background:#20a56b;box-shadow:0 0 0 3px color-mix(in srgb,#20a56b 15%,transparent)}
+
 .ao-seller-application-filters{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 13px}
 .ao-seller-application-filters .chip{display:inline-flex;align-items:center;gap:7px;min-height:36px}
 .ao-seller-application-filters .chip span{font-size:11px;opacity:.8}
@@ -1965,6 +1968,51 @@ a.ao-account-shortcut:hover{border-color:var(--line);background:var(--panel)}
 }
 @media (min-width:1361px){.header .mobile-menu{display:none!important}}
 </style>
+<style id="ao-final-logo-clean-finish">
+/* One clean, consistent logo treatment across header, footer and splash in every theme. */
+.logo.logo-brand img,
+.footer .logo-brand img,
+.splash img,
+.splash-screen img,
+#ao-splash img,
+[class*="splash"] img {
+  display:block !important;
+  object-fit:contain !important;
+  object-position:center !important;
+  background:transparent !important;
+  border:0 !important;
+  clip-path:none !important;
+  mix-blend-mode:normal !important;
+  opacity:1 !important;
+  image-rendering:auto !important;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.16)) !important;
+}
+/* Keep the original metallic finish on light and default themes. */
+html:not([data-theme="dark"]) .logo.logo-brand img,
+html:not([data-theme="dark"]) .footer .logo-brand img,
+html:not([data-theme="dark"]) .splash img,
+html:not([data-theme="dark"]) .splash-screen img,
+html:not([data-theme="dark"]) #ao-splash img,
+html:not([data-theme="dark"]) [class*="splash"] img {
+  filter:contrast(1.08) saturate(.92) drop-shadow(0 1px 2px rgba(0,0,0,.18)) !important;
+}
+/* Lift the silver artwork gently on dark backgrounds without flattening it to a white shape. */
+html[data-theme="dark"] .logo.logo-brand img,
+html[data-theme="dark"] .footer .logo-brand img,
+html[data-theme="dark"] .splash img,
+html[data-theme="dark"] .splash-screen img,
+html[data-theme="dark"] #ao-splash img,
+html[data-theme="dark"] [class*="splash"] img {
+  filter:brightness(1.28) contrast(1.08) saturate(.72) drop-shadow(0 1px 4px rgba(255,255,255,.16)) !important;
+}
+.header .logo.logo-brand img { width:42px !important; height:42px !important; flex:0 0 42px !important; }
+.footer .logo-brand img { width:44px !important; height:44px !important; flex:0 0 44px !important; }
+@media(max-width:620px){
+  .header .logo.logo-brand img { width:34px !important; height:34px !important; flex:0 0 34px !important; }
+  .footer .logo-brand img { width:40px !important; height:40px !important; flex:0 0 40px !important; }
+}
+</style>
+
 </head>
 <body id="top"><div id="ao-splash" class="ao-splash" role="status" aria-live="polite"
      aria-label="Ajay Outfits is preparing your shopping experience" aria-busy="true">
@@ -2022,7 +2070,7 @@ a.ao-account-shortcut:hover{border-color:var(--line);background:var(--panel)}
  <div class="ao-device-mobile-list" id="aoDeviceMobileRows"></div>
  <div class="ao-device-footer"><span id="aoDeviceCount">0 sessions</span><button type="button" class="chip" id="aoDeviceRevokeAll">Revoke all sessions</button></div>
 </section>
-<div class="ao-seller-applications-head"><h3>Seller applications</h3><span class="ao-seller-applications-live"><i></i> Live updates</span></div><div id="aoSellerApplicationFilters" class="ao-seller-application-filters" role="group" aria-label="Filter seller applications"><button type="button" class="chip is-active" data-seller-filter="Pending review" aria-pressed="true">Pending <span id="aoSellerPendingCount">0</span></button><button type="button" class="chip" data-seller-filter="Approved" aria-pressed="false">Approved <span id="aoSellerApprovedCount">0</span></button><button type="button" class="chip" data-seller-filter="Rejected" aria-pressed="false">Rejected <span id="aoSellerRejectedCount">0</span></button><button type="button" class="chip" data-seller-filter="Disapproved" aria-pressed="false">Disapproved <span id="aoSellerDisapprovedCount">0</span></button><button type="button" class="chip" data-seller-filter="All" aria-pressed="false">All applications</button></div><div id="adminSellerApplications" class="admin-list"></div><h3 style="margin-top:28px">Add a product</h3><form id="addProductForm"><div class="formgrid"><div class="field"><label>Product name</label><input id="newName" required placeholder="Product name"></div><div class="field"><label>Brand</label><input id="newBrand" required placeholder="Brand"></div><div class="field"><label>Price (USD)</label><input id="newPrice" type="number" min="1" step=".01" required placeholder="120"></div><div class="field"><label>Category</label><select id="newCategory"><option>Sneakers</option><option>Apparel</option><option>T-shirts</option><option>Hoodies</option><option>Outerwear</option><option>Denim</option><option>Sportswear</option><option>Footwear</option><option>Bags</option><option>Accessories</option><option>Jewelry</option><option>Watches</option><option>Hats</option><option>Socks</option><option>Collectibles</option><option>Kids</option><option>Beauty</option><option>Home & Lifestyle</option><option>Tech Accessories</option><option>Travel</option><option>Outdoor</option><option>Formalwear</option><option>Swimwear</option></select></div><div class="field"><label for="newImage">Product image URL (optional)</label><input id="newImage" type="url" placeholder="https://..." autocomplete="url"></div><div class="field"><label for="newImageFile">Or upload image from your device</label><input id="newImageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><small>PNG, JPG, WEBP or GIF · max 2.5 MB</small><div id="newImagePreview" class="upload-preview" hidden></div></div><div class="field"><label>Available sizes</label><input id="newSize" placeholder="S, M, L, XL or One size"></div><div class="field"><label for="newStock">Stock quantity</label><input id="newStock" type="number" min="0" max="100000" step="1" value="0" required></div><div class="field"><label>Product tag / collection</label><input id="newTag" placeholder="New drop, Best seller, Limited edition"></div><div class="field"><label>Seller</label><input id="newSeller" placeholder="Ajay Outfits"></div></div><button class="btn">Add product +</button></form><section id="aoNewsletterAdmin" class="ao-newsletter-admin" aria-labelledby="aoNewsletterAdminTitle">
+<div class="ao-seller-applications-head"><h3>Seller applications</h3><span class="ao-seller-applications-live">Live updates</span></div><div id="aoSellerApplicationFilters" class="ao-seller-application-filters" role="group" aria-label="Filter seller applications"><button type="button" class="chip is-active" data-seller-filter="Pending review" aria-pressed="true">Pending <span id="aoSellerPendingCount">0</span></button><button type="button" class="chip" data-seller-filter="Approved" aria-pressed="false">Approved <span id="aoSellerApprovedCount">0</span></button><button type="button" class="chip" data-seller-filter="Rejected" aria-pressed="false">Rejected <span id="aoSellerRejectedCount">0</span></button><button type="button" class="chip" data-seller-filter="Disapproved" aria-pressed="false">Disapproved <span id="aoSellerDisapprovedCount">0</span></button><button type="button" class="chip" data-seller-filter="All" aria-pressed="false">All applications</button></div><div id="adminSellerApplications" class="admin-list"></div><h3 style="margin-top:28px">Add a product</h3><form id="addProductForm"><div class="formgrid"><div class="field"><label>Product name</label><input id="newName" required placeholder="Product name"></div><div class="field"><label>Brand</label><input id="newBrand" required placeholder="Brand"></div><div class="field"><label>Price (USD)</label><input id="newPrice" type="number" min="1" step=".01" required placeholder="120"></div><div class="field"><label>Category</label><select id="newCategory"><option>Sneakers</option><option>Apparel</option><option>T-shirts</option><option>Hoodies</option><option>Outerwear</option><option>Denim</option><option>Sportswear</option><option>Footwear</option><option>Bags</option><option>Accessories</option><option>Jewelry</option><option>Watches</option><option>Hats</option><option>Socks</option><option>Collectibles</option><option>Kids</option><option>Beauty</option><option>Home & Lifestyle</option><option>Tech Accessories</option><option>Travel</option><option>Outdoor</option><option>Formalwear</option><option>Swimwear</option></select></div><div class="field"><label for="newImage">Product image URL (optional)</label><input id="newImage" type="url" placeholder="https://..." autocomplete="url"></div><div class="field"><label for="newImageFile">Or upload image from your device</label><input id="newImageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><small>PNG, JPG, WEBP or GIF · max 2.5 MB</small><div id="newImagePreview" class="upload-preview" hidden></div></div><div class="field"><label>Available sizes</label><input id="newSize" placeholder="S, M, L, XL or One size"></div><div class="field"><label for="newStock">Stock quantity</label><input id="newStock" type="number" min="0" max="100000" step="1" value="0" required></div><div class="field"><label>Product tag / collection</label><input id="newTag" placeholder="New drop, Best seller, Limited edition"></div><div class="field"><label>Seller</label><input id="newSeller" placeholder="Ajay Outfits"></div></div><button class="btn">Add product +</button></form><section id="aoNewsletterAdmin" class="ao-newsletter-admin" aria-labelledby="aoNewsletterAdminTitle">
  <div class="ao-newsletter-admin-head"><span class="eyebrow">CUSTOMER ENGAGEMENT</span><h3 id="aoNewsletterAdminTitle">Newsletter & promotions</h3><p>Create a branded promotion and send it to your subscribed Brevo audience.</p></div>
  <form id="aoPromotionForm" class="ao-promotion-form">
   <div class="formgrid">
@@ -2511,7 +2559,7 @@ async function hydrateAjayDataFromSupabase(){
 window.addEventListener('ao:auth-change',event=>{if(event?.detail?.user)setTimeout(()=>hydrateAjayDataFromSupabase().catch(err=>console.warn('[Account data] Refresh after sign-in failed:',err?.message||err)),0)});
 
 // Live sync: keep the storefront and admin/seller dashboards updated when another session changes Supabase data.
-let aoStoreRealtimeChannel=null,aoStoreRealtimeRefreshTimer=null;
+let aoStoreRealtimeChannel=null,aoStoreRealtimeRefreshTimer=null,aoStoreRealtimeClient=null,aoStoreRealtimeUserId='';
 let aoSellerStatusSnapshot=null;
 function aoMaybeNotifySellerDecision(){try{window.aoRefreshCustomerOrderNotices?.();window.aoRefreshSellerNotifications?.()}catch(_){}}
 function aoNotifySellerDecisionChanges(previous){if(Array.isArray(previous))aoMaybeNotifySellerDecision();}
@@ -2519,7 +2567,13 @@ function aoNotifySellerDecisionChanges(previous){if(Array.isArray(previous))aoMa
 function aoSubscribeStoreRealtime(){
  const db=window.ajaySupabase;if(!db||!db.channel)return;
  aoSubscribeProductBroadcast();
+ const currentUserId=String(window.aoCurrentUser?.id||'');
+ if(aoStoreRealtimeChannel&&aoStoreRealtimeClient===db&&aoStoreRealtimeUserId===currentUserId){
+  const state=String(aoStoreRealtimeChannel.state||'').toLowerCase();
+  if(!['closed','errored'].includes(state))return;
+ }
  if(aoStoreRealtimeChannel){try{db.removeChannel(aoStoreRealtimeChannel)}catch(_){}}
+ aoStoreRealtimeClient=db;aoStoreRealtimeUserId=currentUserId;
  aoStoreRealtimeChannel=db.channel('ao-store-live-data')
   .on('postgres_changes',{event:'*',schema:'public',table:'ao_products'},payload=>{
    if(payload?.eventType==='DELETE'){
@@ -2531,7 +2585,7 @@ function aoSubscribeStoreRealtime(){
   .on('postgres_changes',{event:'*',schema:'public',table:'ao_orders'},()=>aoQueueLiveHydrate())
   .on('postgres_changes',{event:'*',schema:'public',table:'ao_seller_applications'},payload=>{console.info('Seller application realtime event:',payload.eventType);aoLoadRole();aoQueueLiveHydrate()})
   .on('postgres_changes',{event:'*',schema:'public',table:'ao_user_roles'},async()=>{try{await aoLoadRole()}catch(_){}aoQueueLiveHydrate()})
-  .subscribe(status=>{if(status==='SUBSCRIBED')console.info('Ajay Outfits live data connected');else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status))console.warn('Ajay Outfits live data connection:',status);});
+  .subscribe(status=>{if(status==='SUBSCRIBED')console.info('Ajay Outfits live data connected');else if(['CHANNEL_ERROR','TIMED_OUT'].includes(status))console.warn('Ajay Outfits live data connection:',status);});
 }
 function aoQueueLiveHydrate(){
  clearTimeout(aoStoreRealtimeRefreshTimer);
@@ -4527,9 +4581,12 @@ body.ao-dashboard-page-mode{overflow:hidden}body.ao-dashboard-page-mode>.wrap,bo
   if(typeof aoLoadRole==='function')await aoLoadRole();
   if(kind==='admin'&&!(typeof aoIsAdmin==='function'&&aoIsAdmin())){if(typeof toast==='function')toast('Administrator access required');return;}
   if(kind==='seller'&&!(typeof aoCanSell==='function'&&aoCanSell())){if(typeof toast==='function')toast('Seller access required');return;}
+  // Return any previously moved dashboard box before looking it up again.
+  // This prevents a repeat navigation from reporting a false missing-modal-content error.
+  if(activePage)closePage(true);
   // Open from the current in-memory snapshot first; render large lists after the frame is painted.
   const modalId=kind==='admin'?'adminModal':'sellerDashboardModal',modal=$('#'+modalId);if(!modal){console.error('Missing dashboard modal:',modalId);return;}const box=modal.querySelector('.modalbox');if(!box){console.error('Missing dashboard content:',modalId);return;}
-  if(activePage)closePage(true);const page=ensurePage();originalParent=box.parentNode;originalNext=box.nextSibling;movedBox=box;const content=$('#aoStandaloneContent');content.replaceChildren();content.appendChild(box);modal.classList.remove('show');modal.setAttribute('aria-hidden','true');box.classList.add('ao-moved-page-box');activePage=kind;$('#aoStandaloneTitle').textContent=kind==='admin'?'Store management':'Seller dashboard';$('#aoStandaloneSubtitle').textContent=kind==='admin'?'Manage the whole store: catalogue, seller approvals, homepage content and system settings.':'Your listings, stock, assigned customer orders and fulfilment updates.';page.classList.toggle('ao-store-management-page',kind==='admin');page.classList.add('show');document.body.classList.add('ao-dashboard-page-mode');history.pushState({aoPage:kind},'', '#ao-page-'+kind);window.scrollTo({top:0,behavior:'auto'});requestAnimationFrame(()=>{if(activePage!==kind)return;if(kind==='admin'&&typeof updateAdmin==='function')updateAdmin();if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();if(typeof renderSellerDashboard==='function')renderSellerDashboard();});if(typeof hydrateAjayDataFromSupabase==='function'){hydrateAjayDataFromSupabase().then(()=>{if(activePage!==kind)return;if(kind==='admin'&&typeof updateAdmin==='function')updateAdmin();if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();if(typeof renderSellerDashboard==='function')renderSellerDashboard();}).catch(err=>console.warn('Background dashboard refresh failed:',err));}
+  const page=ensurePage();originalParent=box.parentNode;originalNext=box.nextSibling;movedBox=box;const content=$('#aoStandaloneContent');content.replaceChildren();content.appendChild(box);modal.classList.remove('show');modal.setAttribute('aria-hidden','true');box.classList.add('ao-moved-page-box');activePage=kind;$('#aoStandaloneTitle').textContent=kind==='admin'?'Store management':'Seller dashboard';$('#aoStandaloneSubtitle').textContent=kind==='admin'?'Manage the whole store: catalogue, seller approvals, homepage content and system settings.':'Your listings, stock, assigned customer orders and fulfilment updates.';page.classList.toggle('ao-store-management-page',kind==='admin');page.classList.add('show');document.body.classList.add('ao-dashboard-page-mode');history.pushState({aoPage:kind},'', '#ao-page-'+kind);window.scrollTo({top:0,behavior:'auto'});requestAnimationFrame(()=>{if(activePage!==kind)return;if(kind==='admin'&&typeof updateAdmin==='function')updateAdmin();if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();if(typeof renderSellerDashboard==='function')renderSellerDashboard();});if(typeof hydrateAjayDataFromSupabase==='function'){hydrateAjayDataFromSupabase().then(()=>{if(activePage!==kind)return;if(kind==='admin'&&typeof updateAdmin==='function')updateAdmin();if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();if(typeof renderSellerDashboard==='function')renderSellerDashboard();}).catch(err=>console.warn('Background dashboard refresh failed:',err));}
  }catch(err){console.error('Dashboard could not open:',err);if(typeof toast==='function')toast('Dashboard could not open. Check the browser console for the error.');}}
  window.aoOpenSellerDashboardPage=()=>openPage('seller');
  function openOrdersPage(){if(typeof aoLoadRole==='function')return aoLoadRole().then(async()=>{const staff=(typeof aoIsAdmin==='function'&&aoIsAdmin())||(typeof aoCanSell==='function'&&aoCanSell());if(!staff){if(typeof openModal==='function')openModal('aoOrdersModal');return;}if(activePage)closePage(true);const page=ensurePage();const content=$('#aoStandaloneContent');const adminMode=typeof aoIsAdmin==='function'&&aoIsAdmin(),ordersTitle='Customer Orders';content.innerHTML='<section class="ao-orders-workspace"><span class="eyebrow">AJAY OUTFITS · ORDER CENTRE</span><h2 style="margin:8px 0">'+ordersTitle+'</h2><p style="color:var(--muted)">'+(adminMode?'Track customer orders across the store, update fulfilment and payment status, and access receipts for completed orders.':'Review orders containing your products, update the fulfilment steps available to your seller account, and access relevant receipts.')+'</p><div id="aoStandaloneOrdersLive" data-ao-order-role="'+(adminMode?'admin':'seller')+'" class="admin-list"></div></section>';movedBox=null;originalParent=null;activePage='orders';$('#aoStandaloneTitle').textContent=ordersTitle;$('#aoStandaloneSubtitle').textContent=adminMode?'All customer orders, fulfilment and receipts.':'Your shop orders, fulfilment and receipts.';page.classList.add('show');document.body.classList.add('ao-dashboard-page-mode');history.pushState({aoPage:'orders'},'', '#ao-page-orders');requestAnimationFrame(()=>{if(activePage==='orders'&&typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();});if(typeof hydrateAjayDataFromSupabase==='function')hydrateAjayDataFromSupabase().then(()=>{if(activePage==='orders'&&typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();}).catch(err=>console.warn('Background orders refresh failed:',err));});}
@@ -4951,9 +5008,23 @@ html[data-theme="dark"] .product-action-note{color:#c1c5ce!important}
  function updateBadges(){if(!canSell()&&!isAdmin())return;const d=collect(),unread=d.notices.filter(n=>!(d.seen||[]).includes(n.key)).length;['aoSellerNotificationCount','aoSellerTopCount'].forEach(id=>{const b=$('#'+id);if(b){b.textContent=unread>99?'99+':String(unread);b.hidden=!unread}});/* Notifications belong to the bell only. Orders and dashboard shortcuts stay clean. */document.querySelectorAll('#aoTopOrders .ao-order-shortcut-count,#adminLink .ao-notify-count,#sellerDashboardLink .ao-notify-count').forEach(b=>b.remove())}
  function ensureBell(){if(!canSell()&&!isAdmin())return;const head=$(isAdmin()?'#adminModal .drawer-head':'#sellerDashboardModal .drawer-head');if(head&&!$('#aoStaffNotificationBell')){const b=document.createElement('button');b.type='button';b.className='ao-seller-notify-btn';b.id='aoStaffNotificationBell';b.innerHTML='<svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg><span>Notifications</span><span class="ao-notify-count" id="aoSellerNotificationCount" hidden>0</span>';b.addEventListener('click',openNotifications);head.insertAdjacentElement('afterend',b)}}
  function hook(){try{if(!uid()||uid()==='guest')return;ensureBell();const bellParent=$('.actions');if(bellParent&&(canSell()||isAdmin())&&!$('#aoSellerTopBell')){const b=document.createElement('button');b.type='button';b.id='aoSellerTopBell';b.className='iconbtn ao-seller-top-bell';b.setAttribute('aria-label','Open staff notifications');b.title='Notifications';b.innerHTML='<svg class="ao-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg><span class="ao-notify-count" id="aoSellerTopCount" hidden>0</span>';const account=$('#accountBtn');(account||bellParent.firstChild)?.insertAdjacentElement('beforebegin',b);b.addEventListener('click',openNotifications)}updateBadges();const openModal=$('#aoSellerNotificationsModal');if(openModal?.classList.contains('show'))openNotifications();try{window.dispatchEvent(new CustomEvent('ao:staff-notifications-updated'))}catch(_){}}catch(e){console.warn('Staff notifications could not refresh',e)}}
- document.addEventListener('click',e=>{if(e.target.closest('#sellerDashboardLink,#adminLink'))setTimeout(hook,150)});document.addEventListener('visibilitychange',()=>{if(!document.hidden)hook()});window.addEventListener('focus',hook);
- let tries=0;const timer=setInterval(()=>{if(!document.hidden)hook();if(++tries>20)clearInterval(timer)},1500);
- const oldHydrate=window.hydrateAjayDataFromSupabase;if(typeof oldHydrate==='function'&&!oldHydrate.__aoStaffNoticeWrapped){const wrapped=async function(...args){const r=await oldHydrate.apply(this,args);setTimeout(hook,0);return r};wrapped.__aoStaffNoticeWrapped=true;window.hydrateAjayDataFromSupabase=wrapped}
+ document.addEventListener('click',e=>{if(e.target.closest('#sellerDashboardLink,#adminLink'))requestAnimationFrame(hook)});
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)hook()});window.addEventListener('focus',hook);
+ // Mount staff header controls as soon as the header or verified role becomes available.
+ // A scoped observer replaces the old 30-second polling loop and does not watch badge text changes.
+ let staffHeaderObserver=null;
+ const observeStaffHeader=()=>{
+  hook();
+  const actions=$('.actions');
+  if(actions&&!staffHeaderObserver&&window.MutationObserver){
+   staffHeaderObserver=new MutationObserver(()=>{if((canSell()||isAdmin())&&!$('#aoSellerTopBell'))hook();});
+   staffHeaderObserver.observe(actions,{childList:true});
+  }
+ };
+ window.addEventListener('ao:role-resolved',observeStaffHeader);
+ window.addEventListener('ao:auth-change',()=>requestAnimationFrame(observeStaffHeader));
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',observeStaffHeader,{once:true});else observeStaffHeader();
+ const oldHydrate=window.hydrateAjayDataFromSupabase;if(typeof oldHydrate==='function'&&!oldHydrate.__aoStaffNoticeWrapped){const wrapped=async function(...args){const r=await oldHydrate.apply(this,args);requestAnimationFrame(hook);return r};wrapped.__aoStaffNoticeWrapped=true;window.hydrateAjayDataFromSupabase=wrapped}
  window.aoRefreshSellerNotifications=hook;
 })();
 </script>
@@ -5683,15 +5754,18 @@ html[data-theme="dark"] #aoCustomerNotificationsModal .ao-notify-item{background
  window.addEventListener('storage',e=>{if(e.key&&e.key.startsWith('ao_customer_order_notices_v3_'))sync()});window.addEventListener('ao:auth-change',()=>sync());window.addEventListener('ao-auth-state-changed',()=>sync());window.addEventListener('ao:customer-notifications-updated',sync);document.addEventListener('visibilitychange',()=>{if(!document.hidden){connectDecisionRealtime();refreshCustomerDecisionFromServer();sync()}});window.addEventListener('focus',()=>{connectDecisionRealtime();refreshCustomerDecisionFromServer();sync()});setInterval(()=>{if(!document.hidden)sync()},15000);setInterval(()=>{if(!document.hidden)refreshCustomerDecisionFromServer()},20000);connectDecisionRealtime();refreshCustomerDecisionFromServer();sync();
  // Header/auth UI can be mounted after this script runs. Observe that transition
  // so the customer bell appears immediately instead of waiting for the 8s poll.
- let bellBootObserver=null,bellBootTimer=null,bellBootTicks=0;
- const tryMountCustomerBell=()=>{if(document.hidden||admin()||seller()||!signed())return;const actions=$('.actions');if(actions&&!$('#aoCustomerTopBell'))sync();if($('#aoCustomerTopBell')){if(bellBootObserver){bellBootObserver.disconnect();bellBootObserver=null}if(bellBootTimer){clearInterval(bellBootTimer);bellBootTimer=null}}};
+ let bellBootObserver=null;
+ const tryMountCustomerBell=()=>{if(admin()||seller()||!signed())return;const actions=$('.actions');if(actions&&!$('#aoCustomerTopBell'))sync();if($('#aoCustomerTopBell')&&bellBootObserver){bellBootObserver.disconnect();bellBootObserver=null}};
  const startBellBootWatch=()=>{
   tryMountCustomerBell();
-  if(!bellBootObserver&&document.documentElement){bellBootObserver=new MutationObserver(()=>{if(!$('#aoCustomerTopBell'))tryMountCustomerBell()});bellBootObserver.observe(document.documentElement,{childList:true,subtree:true});}
-  if(!bellBootTimer){bellBootTicks=0;bellBootTimer=setInterval(()=>{bellBootTicks++;tryMountCustomerBell();if(bellBootTicks>=30||$('#aoCustomerTopBell')){clearInterval(bellBootTimer);bellBootTimer=null}},400);}
+  // The header can be rendered after this module. Observe DOM insertion instead of
+  // polling every 400ms; auth/role events explicitly retry the mount.
+  if(!bellBootObserver&&document.documentElement){bellBootObserver=new MutationObserver(()=>{if(!$('#aoCustomerTopBell'))tryMountCustomerBell();else{bellBootObserver.disconnect();bellBootObserver=null}});bellBootObserver.observe(document.documentElement,{childList:true,subtree:true});}
  };
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',startBellBootWatch,{once:true});else startBellBootWatch();
  window.addEventListener('ao-auth-state-changed',startBellBootWatch);
+ window.addEventListener('ao:auth-change',startBellBootWatch);
+ window.addEventListener('ao:role-resolved',startBellBootWatch);
  window.addEventListener('storage',e=>{if(e.key&&/auth|session|user|profile/i.test(e.key))startBellBootWatch()});
 })();
 </script>
@@ -7891,4 +7965,74 @@ html[data-theme="dark"] .ao-seller-review-card{background:var(--panel);color:var
 }
 @media(max-width:350px){#checkoutForm .ao-payment-option{padding:6px 1px!important;gap:3px!important}#checkoutForm .ao-payment-option span,#checkoutForm .ao-payment-option b{font-size:8.5px!important}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}}
+</style>
+<style id="ao-header-icons-final-layout-fix-v4">
+/* Final header sizing: one consistent control size for static and dynamically injected icons. */
+@media (max-width:1360px){
+  header.header .wrap.nav{
+    display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;
+    align-items:center!important;column-gap:clamp(2px,.55vw,6px)!important;
+    min-width:0!important;overflow:visible!important;white-space:nowrap!important;
+  }
+  header.header .nav .logo-brand{flex:0 1 auto!important;min-width:0!important;max-width:none!important;}
+  header.header .nav .actions{
+    display:flex!important;flex:0 0 auto!important;flex-wrap:nowrap!important;
+    align-items:center!important;justify-content:flex-end!important;
+    min-width:max-content!important;width:auto!important;max-width:none!important;
+    margin-left:auto!important;gap:clamp(1px,.35vw,3px)!important;white-space:nowrap!important;
+  }
+  header.header .nav .actions>.iconbtn,
+  header.header .nav .actions>.ao-header-logout,
+  header.header .nav #aoAccountActions .ao-account-action,
+  header.header .nav .actions>#aoCustomerTopBell,
+  header.header .nav .actions>#aoSellerTopBell{
+    box-sizing:border-box!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;
+    flex:0 0 clamp(18px,5.8vw,25px)!important;
+    width:clamp(18px,5.8vw,25px)!important;min-width:clamp(18px,5.8vw,25px)!important;
+    height:clamp(18px,5.8vw,25px)!important;min-height:clamp(18px,5.8vw,25px)!important;
+    max-width:none!important;padding:0!important;margin:0!important;
+    border:0!important;border-radius:50%!important;background:transparent!important;box-shadow:none!important;
+  }
+  header.header .nav .actions>.iconbtn>svg,
+  header.header .nav .actions>.ao-header-logout>svg,
+  header.header .nav #aoAccountActions .ao-account-action>svg,
+  header.header .nav #aoCustomerTopBell>svg,
+  header.header .nav #aoSellerTopBell>svg{
+    display:block!important;width:clamp(10px,3.35vw,14px)!important;height:clamp(10px,3.35vw,14px)!important;
+    min-width:0!important;max-width:14px!important;min-height:0!important;max-height:14px!important;flex:0 0 auto!important;
+  }
+  header.header .nav #aoCustomerTopBell,
+  header.header .nav #aoSellerTopBell{min-width:clamp(18px,5.8vw,25px)!important;padding:0!important;}
+  header.header .nav #aoCustomerTopBell>svg{width:clamp(10px,3.35vw,14px)!important;height:clamp(10px,3.35vw,14px)!important;}
+  header.header .nav #mobileMenuBtn{
+    box-sizing:border-box!important;flex:0 0 clamp(18px,5.8vw,25px)!important;
+    width:clamp(18px,5.8vw,25px)!important;min-width:clamp(18px,5.8vw,25px)!important;
+    height:clamp(18px,5.8vw,25px)!important;min-height:clamp(18px,5.8vw,25px)!important;
+    margin:0 0 0 2px!important;padding:0!important;border:0!important;border-radius:50%!important;
+    background:transparent!important;box-shadow:none!important;align-items:center!important;justify-content:center!important;
+  }
+  header.header .nav #mobileMenuBtn>svg{width:clamp(10px,3.35vw,14px)!important;height:clamp(10px,3.35vw,14px)!important;}
+  header.header:not(.ao-nav-needs-menu) .nav #mobileMenuBtn{display:none!important;}
+  header.header.ao-nav-needs-menu .nav #mobileMenuBtn{display:inline-flex!important;}
+  header.header .nav #primaryNav.mobile-open{z-index:1200!important;}
+}
+@media(max-width:390px){
+  header.header .wrap.nav{column-gap:2px!important;}
+  header.header .nav .actions{gap:0!important;}
+  header.header .nav .actions>.iconbtn,
+  header.header .nav .actions>.ao-header-logout,
+  header.header .nav #aoAccountActions .ao-account-action,
+  header.header .nav .actions>#aoCustomerTopBell,
+  header.header .nav .actions>#aoSellerTopBell,
+  header.header .nav #mobileMenuBtn{
+    flex-basis:clamp(16px,5.8vw,21px)!important;width:clamp(16px,5.8vw,21px)!important;
+    min-width:clamp(16px,5.8vw,21px)!important;height:clamp(16px,5.8vw,21px)!important;min-height:clamp(16px,5.8vw,21px)!important;
+  }
+  header.header .nav .actions>.iconbtn>svg,
+  header.header .nav .actions>.ao-header-logout>svg,
+  header.header .nav #aoAccountActions .ao-account-action>svg,
+  header.header .nav #aoCustomerTopBell>svg,
+  header.header .nav #aoSellerTopBell>svg,
+  header.header .nav #mobileMenuBtn>svg{width:clamp(9px,3.2vw,12px)!important;height:clamp(9px,3.2vw,12px)!important;}
+}
 </style>
