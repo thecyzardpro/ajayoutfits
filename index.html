@@ -25,9 +25,9 @@
 <link rel="preconnect" href="https://unpkg.com" crossorigin>
 <link rel="preconnect" href="https://images.unsplash.com" crossorigin>
 <style id="ao-cloud-image-hydration-guard">
-/* Never expose seed/demo imagery while the last Admin-published catalogue and homepage
-   settings are still being resolved. A real local cache remains visible immediately. */
-html.ao-admin-images-pending .hero-art>img{visibility:hidden!important;opacity:0!important}
+/* Never expose seed/demo imagery or stale browser-cached imagery before the Admin-published
+   catalogue and homepage settings have been confirmed by the cloud read. */
+html.ao-admin-images-pending .hero-art>img,html.ao-admin-images-pending .ao-section-image{visibility:hidden!important;opacity:0!important}
 html.ao-no-local-catalogue #products .product,
 html.ao-no-local-catalogue #recentProducts .product{visibility:hidden!important}
 html.ao-no-local-catalogue #products .product-image>img,
@@ -242,9 +242,9 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{width:0!imp
 .release-card .chip{background:rgba(255,255,255,.94);color:#191715;border-color:#fff;margin-top:8px}
 .editorial-card{position:relative;isolation:isolate;overflow:hidden;min-height:300px;padding:24px;color:#fff;background-size:cover;background-position:center;justify-content:space-between}
 .editorial-card:before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(15,12,10,.28),rgba(15,12,10,.82))}
-/* Journal imagery is supplied by the Admin image manager only. */
-/* Journal imagery is supplied by the Admin image manager only. */
-/* Journal imagery is supplied by the Admin image manager only. */
+.editorial-card:nth-child(1){background-image:url('https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=1000&q=85')}
+.editorial-card:nth-child(2){background-image:url('https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=85')}
+.editorial-card:nth-child(3){background-image:url('https://images.unsplash.com/photo-1523398002811-999ca8dec234?auto=format&fit=crop&w=800&q=85')}
 .editorial-card .eyebrow,.editorial-card h3,.editorial-card p,.editorial-card button{color:#fff;position:relative;text-shadow:0 1px 8px rgba(0,0,0,.18)}
 .editorial-card h3{max-width:440px}.editorial-card button{border-bottom:1px solid rgba(255,255,255,.7);padding-bottom:6px}
 @media(max-width:1100px){.navlinks a:nth-child(n+5){display:none}.search-live{flex-basis:320px;min-width:280px}}
@@ -1333,10 +1333,10 @@ html[data-theme="dark"] #aoReceiptModal #aoReceiptContent .ao-receipt-qr,
 
 <style id="ao-role-aware-header-chrome">
 /* Use the last verified role immediately on repeat visits; only unknown/new accounts wait for verification. */
-html:not([data-ao-role-ready="true"]):not([data-ao-role-fast="customer"]) .header .actions #cartBtn,
-html:not([data-ao-role-ready="true"]):not([data-ao-role-fast="customer"]) .header .actions #wishBtn,
-html.ao-role-chrome-transition:not([data-ao-role-fast="customer"]) .header .actions #cartBtn,
-html.ao-role-chrome-transition:not([data-ao-role-fast="customer"]) .header .actions #wishBtn{visibility:hidden!important;pointer-events:none!important;}
+html[data-ao-role-fast="seller"] .header .actions #cartBtn,
+html[data-ao-role-fast="seller"] .header .actions #wishBtn,
+html[data-ao-role-fast="admin"] .header .actions #cartBtn,
+html[data-ao-role-fast="admin"] .header .actions #wishBtn{visibility:hidden!important;pointer-events:none!important;}
 #aoAccountActions[hidden]{display:none!important;}
 </style>
 
@@ -1789,7 +1789,7 @@ a.ao-account-shortcut:hover{border-color:var(--line);background:var(--panel)}
 #aoFooterAppDownload .ao-app-download-link:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}
 
 </style>
-<style id="ao-role-navigation-no-flash">html:not([data-ao-role-ready="true"]):not([data-ao-role-fast="customer"]) #cartBtn,html:not([data-ao-role-ready="true"]):not([data-ao-role-fast="customer"]) #wishBtn{visibility:hidden!important;pointer-events:none!important}</style>
+<style id="ao-role-navigation-no-flash">html[data-ao-role-fast="seller"] #cartBtn,html[data-ao-role-fast="seller"] #wishBtn,html[data-ao-role-fast="admin"] #cartBtn,html[data-ao-role-fast="admin"] #wishBtn{visibility:hidden!important;pointer-events:none!important}</style>
 
 <style id="ao-header-one-line-role-aware-corrected">
 /* Header-only correction: keep navigation and role actions compact and on one row. */
@@ -2239,7 +2239,6 @@ const seedProducts=[
 ];
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const read=(key,fallback)=>{try{const v=stateStore.getItem('ao_'+key);return v?JSON.parse(v):fallback}catch{return fallback}};
-// Always keep cached/seed product cards hidden until the authoritative Supabase catalogue has loaded successfully.
 document.documentElement.classList.add('ao-no-local-catalogue');
 const write=(key,val)=>stateStore.setItem('ao_'+key,JSON.stringify(val));
 let products=read('products',seedProducts),cart=read('cart',[]),wishlist=read('wishlist',[]),profile=read('profile',null),orders=read('orders',[]),sellers=read('sellers',[]),recentlyViewed=read('recentlyViewed',[]),category='All',query='',sort='featured',detailId=null,detailSize='';
@@ -2265,7 +2264,7 @@ const aoRecordFingerprint = value => {
  try { return JSON.stringify(value); } catch (_) { return ''; }
 };
 // Product updates use Broadcast as a fast live path, with postgres_changes retained as a fallback.
-let aoProductBroadcastChannel=null,aoProductBroadcastReady=false;
+let aoProductBroadcastChannel=null,aoProductBroadcastReady=false,aoProductBroadcastRetryTimer=null,aoProductBroadcastRetryDelay=3000;
 function aoApplyRealtimeProduct(product){
  if(!product||product.id==null)return;
  const id=String(product.id),index=products.findIndex(p=>String(p.id)===id),copy={...product};
@@ -2293,10 +2292,10 @@ function aoSubscribeProductBroadcast(){
    .on('broadcast',{event:'product-upserted'},message=>aoApplyRealtimeProduct(message?.payload?.product))
    .subscribe(status=>{
     aoProductBroadcastReady=status==='SUBSCRIBED';
-    if(aoProductBroadcastReady){console.info('[Products] Live broadcast connected');finish(true)}
-    else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){console.warn('[Products] Live broadcast status:',status);finish(false)}
+    if(aoProductBroadcastReady){if(aoProductBroadcastRetryTimer){clearTimeout(aoProductBroadcastRetryTimer);aoProductBroadcastRetryTimer=null}aoProductBroadcastRetryDelay=3000;console.info('[Products] Live broadcast connected');finish(true)}
+    else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){console.warn('[Products] Live broadcast status:',status,'— retry scheduled');finish(false);if(!aoProductBroadcastRetryTimer){const wait=aoProductBroadcastRetryDelay;aoProductBroadcastRetryDelay=Math.min(aoProductBroadcastRetryDelay*2,30000);aoProductBroadcastRetryTimer=setTimeout(()=>{aoProductBroadcastRetryTimer=null;aoSubscribeProductBroadcast()},wait)}}
    });
-  setTimeout(()=>finish(aoProductBroadcastReady),8000);
+  setTimeout(()=>{if(!settled){finish(aoProductBroadcastReady);if(!aoProductBroadcastReady&&!aoProductBroadcastRetryTimer){const wait=aoProductBroadcastRetryDelay;aoProductBroadcastRetryDelay=Math.min(aoProductBroadcastRetryDelay*2,30000);aoProductBroadcastRetryTimer=setTimeout(()=>{aoProductBroadcastRetryTimer=null;aoSubscribeProductBroadcast()},wait)}}},8000);
  }).finally(()=>{aoProductBroadcastSubscribePromise=null});
  return aoProductBroadcastSubscribePromise;
 }
@@ -2470,8 +2469,6 @@ async function syncAjayDataToSupabase(){
 }
 async function aoHydrateAjayDataFromSupabaseOnce(){
  const db=window.ajaySupabase;if(!db)return;
- // Do not paint a stale browser catalogue while the authoritative cloud catalogue is loading.
- document.documentElement.classList.add('ao-no-local-catalogue');
  // Retry idempotent reads only. Writes are never retried by this helper.
  const aoRetryCloudRead=async(makeRequest,attempts=3)=>{
   let lastError=null;
@@ -2488,14 +2485,11 @@ async function aoHydrateAjayDataFromSupabaseOnce(){
  // Fetch Admin-published homepage images separately from the full catalogue. This
  // prevents a slow products query from leaving the hero on demo imagery or hidden.
  const homepageSettingsRequest=aoRetryCloudRead(()=>db.from('ao_products').select('id,data').eq('id',HOMEPAGE_SETTINGS_ID).maybeSingle());
- homepageSettingsRequest.then(result=>{
+ const homepageSettingsApplied=homepageSettingsRequest.then(result=>{
   if(result?.error){
    window.__aoHomepageImagesCloudLoadError=result.error.message;
-   console.warn('[Homepage images] Could not load Admin-published settings; showing the built-in hero fallback:',result.error.message);
-   document.documentElement.dataset.aoHomepageImagesCloudResolved='error';
-   document.documentElement.classList.remove('ao-admin-images-pending');
-   window.dispatchEvent(new Event('ao:homepage-images-cloud-failed'));
-   return;
+   console.warn('[Homepage images] Could not load Admin-published settings:',result.error.message);
+   return; // Keep the demo/seed hero hidden; do not replace Admin imagery with a guess.
   }
   const row=result?.data||null;
   window.__aoHomepageImagesCloudExists=!!row;
@@ -2504,10 +2498,7 @@ async function aoHydrateAjayDataFromSupabaseOnce(){
   window.dispatchEvent(new CustomEvent('ao:homepage-images-cloud-loaded',{detail:{images:window.__aoHomepageImagesCloud}}));
  }).catch(err=>{
   window.__aoHomepageImagesCloudLoadError=String(err?.message||err);
-  console.warn('[Homepage images] Admin settings request failed; showing the built-in hero fallback:',err?.message||err);
-  document.documentElement.dataset.aoHomepageImagesCloudResolved='error';
-  document.documentElement.classList.remove('ao-admin-images-pending');
-  window.dispatchEvent(new Event('ao:homepage-images-cloud-failed'));
+  console.warn('[Homepage images] Admin settings request failed:',err?.message||err);
  });
  const productRequest=aoRetryCloudRead(()=>db.from('ao_products').select('id,data'));
  // Private account data must never be requested without an authenticated user.
@@ -2517,7 +2508,7 @@ async function aoHydrateAjayDataFromSupabaseOnce(){
  let productApplied=false;
  const applyProductResult=pr=>{
   if(productApplied)return;productApplied=true;
-  if(pr?.error){aoProductsCloudReadable=false;console.error('[Products] Cloud catalogue could not be loaded; stale local/demo products remain hidden:',pr.error.message);document.documentElement.classList.remove('ao-cloud-hydrating');document.documentElement.dataset.aoStorefrontHydrated='error';try{document.dispatchEvent(new Event('ao:storefront-hydrated'))}catch(_){}return;}
+  if(pr?.error){aoProductsCloudReadable=false;products=[];renderProducts();const empty=$('#noResults');if(empty){empty.textContent='The live catalogue is temporarily unavailable. Please try again shortly.';empty.classList.remove('hide')}document.documentElement.classList.add('ao-no-local-catalogue');console.warn('[Products] Cloud catalogue read failed; cached/default products were suppressed:',pr.error.message);document.documentElement.dataset.aoStorefrontHydrated='true';try{document.dispatchEvent(new Event('ao:storefront-hydrated'))}catch(_){}return;}
   aoProductsCloudReadable=true;
   const rows=pr?.data||[];
   // The dedicated homepage settings request owns the authoritative image state.
@@ -2540,9 +2531,9 @@ async function aoHydrateAjayDataFromSupabaseOnce(){
   try{document.dispatchEvent(new Event('ao:storefront-hydrated'))}catch(_){}
  };
  // Product data is applied as soon as its request completes; it does not block startup.
- productRequest.then(applyProductResult).catch(err=>{console.error('[Products] Cloud catalogue request failed; stale local/demo products remain hidden:',err);document.documentElement.classList.remove('ao-cloud-hydrating');document.documentElement.dataset.aoStorefrontHydrated='error';try{document.dispatchEvent(new Event('ao:storefront-hydrated'))}catch(_){}});
+ const productHydration=productRequest.then(applyProductResult).catch(err=>{products=[];renderProducts();const empty=$('#noResults');if(empty){empty.textContent='The live catalogue is temporarily unavailable. Please try again shortly.';empty.classList.remove('hide')}document.documentElement.classList.add('ao-no-local-catalogue');console.warn('[Products] Cloud catalogue hydration failed; cached/default products were suppressed:',err?.message||err);document.documentElement.dataset.aoStorefrontHydrated='true';try{document.dispatchEvent(new Event('ao:storefront-hydrated'))}catch(_){}});
  // Orders and seller data hydrate independently and cannot hold up the storefront.
- void Promise.all([orderRequest,sellerRequest]).then(([or,sr])=>{
+ const privateHydration=Promise.all([orderRequest,sellerRequest]).then(([or,sr])=>{
   if(or.skipped){/* Guest storefront: wait for sign-in before private order reads. */}
   else if(or.error){aoOrdersCloudReadable=false;console.warn('Could not hydrate orders:',or.error.message,'Order data was left untouched locally; check ao_orders SELECT grants and RLS policies.');}
   else {aoOrdersCloudReadable=true;orders=(or.data||[]).map(r=>r.data).filter(Boolean);window.__aoInitialOrderHydrationComplete=true;write('orders',orders);aoLastSyncedOrders=new Map(orders.filter(o=>o&&o.id!=null).map(o=>[String(o.id),aoRecordFingerprint(o)]));}
@@ -2554,6 +2545,9 @@ async function aoHydrateAjayDataFromSupabaseOnce(){
   if(typeof renderSellerDashboard==='function')renderSellerDashboard();
   if(typeof updateAdmin==='function')updateAdmin();
  }).catch(err=>console.warn('Private account data refresh was deferred:',err?.message||err));
+ // Resolve only after all started reads and their state application have completed.
+ // This makes the in-flight guard effective and prevents overlapping realtime hydrations.
+ await Promise.all([homepageSettingsApplied,productHydration,privateHydration]);
 }
 
 // Share one in-flight full-store hydration across navigation, realtime and notification callers.
@@ -2568,7 +2562,7 @@ async function hydrateAjayDataFromSupabase(){
 window.addEventListener('ao:auth-change',event=>{if(event?.detail?.user)setTimeout(()=>hydrateAjayDataFromSupabase().catch(err=>console.warn('[Account data] Refresh after sign-in failed:',err?.message||err)),0)});
 
 // Live sync: keep the storefront and admin/seller dashboards updated when another session changes Supabase data.
-let aoStoreRealtimeChannel=null,aoStoreRealtimeRefreshTimer=null,aoStoreRealtimeClient=null,aoStoreRealtimeUserId='';
+let aoStoreRealtimeChannel=null,aoStoreRealtimeRefreshTimer=null,aoStoreRealtimeRetryTimer=null,aoStoreRealtimeRetryDelay=2500;
 let aoSellerStatusSnapshot=null;
 function aoMaybeNotifySellerDecision(){try{window.aoRefreshCustomerOrderNotices?.();window.aoRefreshSellerNotifications?.()}catch(_){}}
 function aoNotifySellerDecisionChanges(previous){if(Array.isArray(previous))aoMaybeNotifySellerDecision();}
@@ -2576,13 +2570,7 @@ function aoNotifySellerDecisionChanges(previous){if(Array.isArray(previous))aoMa
 function aoSubscribeStoreRealtime(){
  const db=window.ajaySupabase;if(!db||!db.channel)return;
  aoSubscribeProductBroadcast();
- const currentUserId=String(window.aoCurrentUser?.id||'');
- if(aoStoreRealtimeChannel&&aoStoreRealtimeClient===db&&aoStoreRealtimeUserId===currentUserId){
-  const state=String(aoStoreRealtimeChannel.state||'').toLowerCase();
-  if(!['closed','errored'].includes(state))return;
- }
  if(aoStoreRealtimeChannel){try{db.removeChannel(aoStoreRealtimeChannel)}catch(_){}}
- aoStoreRealtimeClient=db;aoStoreRealtimeUserId=currentUserId;
  aoStoreRealtimeChannel=db.channel('ao-store-live-data')
   .on('postgres_changes',{event:'*',schema:'public',table:'ao_products'},payload=>{
    if(payload?.eventType==='DELETE'){
@@ -2594,7 +2582,7 @@ function aoSubscribeStoreRealtime(){
   .on('postgres_changes',{event:'*',schema:'public',table:'ao_orders'},()=>aoQueueLiveHydrate())
   .on('postgres_changes',{event:'*',schema:'public',table:'ao_seller_applications'},payload=>{console.info('Seller application realtime event:',payload.eventType);aoLoadRole();aoQueueLiveHydrate()})
   .on('postgres_changes',{event:'*',schema:'public',table:'ao_user_roles'},async()=>{try{await aoLoadRole()}catch(_){}aoQueueLiveHydrate()})
-  .subscribe(status=>{if(status==='SUBSCRIBED')console.info('Ajay Outfits live data connected');else if(['CHANNEL_ERROR','TIMED_OUT'].includes(status))console.warn('Ajay Outfits live data connection:',status);});
+  .subscribe(status=>{if(status==='SUBSCRIBED'){if(aoStoreRealtimeRetryTimer){clearTimeout(aoStoreRealtimeRetryTimer);aoStoreRealtimeRetryTimer=null}aoStoreRealtimeRetryDelay=2500;console.info('Ajay Outfits live data connected')}else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){console.warn('Ajay Outfits live data connection:',status,'— retry scheduled');if(!aoStoreRealtimeRetryTimer){const wait=aoStoreRealtimeRetryDelay;aoStoreRealtimeRetryDelay=Math.min(aoStoreRealtimeRetryDelay*2,30000);aoStoreRealtimeRetryTimer=setTimeout(()=>{aoStoreRealtimeRetryTimer=null;aoSubscribeStoreRealtime()},wait)}}});
 }
 function aoQueueLiveHydrate(){
  clearTimeout(aoStoreRealtimeRefreshTimer);
@@ -2989,7 +2977,7 @@ function aoIsAdmin(){return !!(aoCurrentUser&&aoCurrentRole==='admin')}
 function aoHasAdminRole(){return aoIsAdmin()}
 function aoCanSell(){return !!(aoCurrentUser&&(aoCurrentRole==='seller'||aoCurrentRole==='admin'))}
 function aoIsStaff(){return aoIsAdmin()||aoCanSell()}
-function aoUpdateRoleLinks(){const adminRole=aoIsAdmin(),sellerRole=aoCanSell(),staff=adminRole||sellerRole;const admin=$('#adminLink'),seller=$('#sellerDashboardLink');if(admin){admin.hidden=!adminRole;admin.setAttribute('aria-hidden',String(!adminRole))}if(seller){seller.hidden=!sellerRole;seller.setAttribute('aria-hidden',String(!sellerRole));if(!sellerRole){seller.querySelector('.ao-notify-count')?.remove();seller.removeAttribute('data-notification-count')}}const cart=$('#cartBtn'),wish=$('#wishBtn');if(cart){cart.hidden=staff;cart.setAttribute('aria-hidden',String(staff))}if(wish){wish.hidden=staff;wish.setAttribute('aria-hidden',String(staff))}const topOrders=$('#aoTopOrders'),accountOrders=$('#aoDashboardOrders');if(topOrders){topOrders.hidden=false;topOrders.setAttribute('aria-hidden','false');topOrders.setAttribute('aria-label',staff?'Customer Orders':'My Orders');topOrders.title=staff?'Customer Orders':'My Orders'}if(accountOrders){accountOrders.hidden=false;accountOrders.setAttribute('aria-hidden','false');const label=accountOrders.querySelector('b');if(label)label.textContent=staff?'Customer Orders':'My Orders'}const dashboardCart=$('#aoDashboardCart'),dashboardWishlist=$('#aoDashboardWishlist');if(dashboardCart){dashboardCart.hidden=staff;dashboardCart.setAttribute('aria-hidden',String(staff))}if(dashboardWishlist){dashboardWishlist.hidden=staff;dashboardWishlist.setAttribute('aria-hidden',String(staff))}const ordersLabel=$('#aoMyOrdersButton');if(ordersLabel)ordersLabel.textContent=staff?'Customer Orders & receipts':'My Orders & receipts';const heading=$('#aoOrdersModal .drawer-head h2');if(heading)heading.textContent=staff?'Customer Orders':'My Orders';if(!adminRole)closeModal('adminModal');if(!sellerRole)closeModal('sellerDashboardModal')}
+function aoUpdateRoleLinks(){const adminRole=aoIsAdmin(),sellerRole=aoCanSell(),staff=adminRole||sellerRole;const sellWithUs=$('#footerSell');if(sellWithUs){sellWithUs.hidden=staff;sellWithUs.setAttribute('aria-hidden',String(staff));}const admin=$('#adminLink'),seller=$('#sellerDashboardLink');if(admin){admin.hidden=!adminRole;admin.setAttribute('aria-hidden',String(!adminRole))}if(seller){seller.hidden=!sellerRole;seller.setAttribute('aria-hidden',String(!sellerRole));if(!sellerRole){seller.querySelector('.ao-notify-count')?.remove();seller.removeAttribute('data-notification-count')}}const cart=$('#cartBtn'),wish=$('#wishBtn');if(cart){cart.hidden=staff;cart.setAttribute('aria-hidden',String(staff))}if(wish){wish.hidden=staff;wish.setAttribute('aria-hidden',String(staff))}const topOrders=$('#aoTopOrders'),accountOrders=$('#aoDashboardOrders');if(topOrders){topOrders.hidden=false;topOrders.setAttribute('aria-hidden','false');topOrders.setAttribute('aria-label',staff?'Customer Orders':'My Orders');topOrders.title=staff?'Customer Orders':'My Orders'}if(accountOrders){accountOrders.hidden=false;accountOrders.setAttribute('aria-hidden','false');const label=accountOrders.querySelector('b');if(label)label.textContent=staff?'Customer Orders':'My Orders'}const dashboardCart=$('#aoDashboardCart'),dashboardWishlist=$('#aoDashboardWishlist');if(dashboardCart){dashboardCart.hidden=staff;dashboardCart.setAttribute('aria-hidden',String(staff))}if(dashboardWishlist){dashboardWishlist.hidden=staff;dashboardWishlist.setAttribute('aria-hidden',String(staff))}const ordersLabel=$('#aoMyOrdersButton');if(ordersLabel)ordersLabel.textContent=staff?'Customer Orders & receipts':'My Orders & receipts';const heading=$('#aoOrdersModal .drawer-head h2');if(heading)heading.textContent=staff?'Customer Orders':'My Orders';if(!adminRole)closeModal('adminModal');if(!sellerRole)closeModal('sellerDashboardModal')}
 window.aoLoadRole=aoLoadRole;window.aoIsAdmin=aoIsAdmin;window.aoCanSell=aoCanSell;window.aoIsStaff=aoIsStaff;window.aoUpdateRoleLinks=aoUpdateRoleLinks;
 async function aoEnsureSignedIn(){if(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl()))return false;const db=window.ajaySupabase;if(!db){toast('Account services are not connected yet');await aoRefreshAuthUI();openModal('accountModal');return false}const {data:{session}}=await db.auth.getSession();if(!session?.user){await aoRefreshAuthUI();aoSetAuthMode('login');aoAuthMessage('Sign in to continue.','info');openModal('accountModal');return false}aoCurrentUser=session.user;return true}
 function renderSellerDashboard(){
@@ -3210,8 +3198,8 @@ $('#sellerDashListing').addEventListener('click',async e=>{
 });
 // Role model: one database role per account. Admin includes seller capabilities without assigning a second role.
 window.addEventListener('ao:auth-change',()=>{aoLoadRole();setTimeout(()=>aoSubscribeStoreRealtime(),180)});
-if(window.ajaySupabase){window.ajaySupabase.auth.onAuthStateChange((event)=>{if(event!=='SIGNED_OUT'&&(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl())))return;setTimeout(()=>{aoRefreshAuthUI();aoLoadRole();if(event==='SIGNED_IN')aoSubscribeStoreRealtime()},0)});aoSubscribeStoreRealtime();}
-aoLoadRole();
+if(window.ajaySupabase){window.ajaySupabase.auth.onAuthStateChange((event)=>{if(event!=='SIGNED_OUT'&&(window.__aoPasswordRecoveryActive||((typeof aoIsRecoveryUrl==='function')&&aoIsRecoveryUrl())))return;setTimeout(()=>{aoRefreshAuthUI();aoLoadRole();if(event==='SIGNED_IN')aoSubscribeStoreRealtime()},0)});}
+aoLoadRole();if(window.ajaySupabase)aoSubscribeStoreRealtime();
 
 let uploadedProductImage='';$('#newImageFile').addEventListener('change',e=>{const file=e.target.files&&e.target.files[0];uploadedProductImage='';$('#newImagePreview').hidden=true;$('#newImagePreview').innerHTML='';if(!file)return;if(!/^image\/(png|jpeg|webp|gif)$/.test(file.type)){e.target.value='';toast('Choose a PNG, JPG, WEBP or GIF image');return}if(file.size>2.5*1024*1024){e.target.value='';toast('Image is too large. Please use an image under 2.5 MB');return}const reader=new FileReader();reader.onload=()=>{const img=new Image();img.onload=()=>{try{const max=1200,scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);uploadedProductImage=canvas.toDataURL('image/jpeg',.82);$('#newImagePreview').innerHTML='<img alt="Product image preview" src="'+uploadedProductImage+'"><small>'+safe(file.name)+' · optimized for web</small>';$('#newImagePreview').hidden=false}catch(err){toast('Could not process this image file')}};img.onerror=()=>toast('This image could not be opened');img.src=String(reader.result||'')};reader.onerror=()=>toast('Could not read this image file');reader.readAsDataURL(file)});$('#addProductForm').addEventListener('submit',async e=>{e.preventDefault();if(!aoHasAdminRole()){toast('Administrator access required');return}let image=$('#newImage').value.trim()||'https://placehold.co/600x700/ecece5/171815?text=AJAY+OUTFITS';
 const newStock=Number($('#newStock').value);if(!Number.isInteger(newStock)||newStock<0||newStock>100000){toast('Enter a whole stock quantity from 0 to 100000');return}if(uploadedProductImage){const file=$('#newImageFile').files?.[0],db=window.ajaySupabase;if(!db||!file){toast('Sign in and configure Supabase Storage to upload product photos');return}try{const {data:{user},error:userError}=await db.auth.getUser();if(userError||!user?.id)throw new Error('Your signed-in user could not be verified. Please sign in again.');const blob=await (await fetch(uploadedProductImage)).blob();const path=`${user.id}/products/${Date.now()}-${(file.name||'product.jpg').replace(/[^a-zA-Z0-9._-]/g,'-')}`;const bucket=db.storage.from('ao-product-images');const up=await bucket.upload(path,blob,{contentType:'image/jpeg',upsert:false,cacheControl:'31536000'});if(up.error){toast('Storage upload failed: '+up.error.message+'. Check the ao-product-images bucket policies.');return}image=bucket.getPublicUrl(path).data.publicUrl;}catch(err){toast('Could not upload product photo: '+(err?.message||'Check Supabase Storage permissions.'));return}}
@@ -3582,63 +3570,49 @@ window.__aoStorefrontHydrationPromise=(async()=>{
 <script id="ao-splash-controller-final">
 (function(){
   'use strict';
-  const splash=document.getElementById('ao-splash');
-  if(!splash||splash.dataset.controller==='final')return;
-  splash.dataset.controller='final';
-  let hydrationDone=document.documentElement.dataset.aoStorefrontHydrated==='true';
-  let homepageSettingsDone=['true','error'].includes(document.documentElement.dataset.aoHomepageImagesCloudResolved||'');
-  let homepageImagesApplied=false;
-  let criticalImagesDone=false,imageWaitStarted=false,minimumTimeDone=false,dismissed=false,failSafe=0;
-  function waitForImage(img){
-    if(!img||!img.getAttribute('src'))return Promise.resolve(true);
-    if(img.complete)return Promise.resolve(img.naturalWidth>0);
-    return new Promise(resolve=>{
-      let settled=false;
-      const finish=ok=>{if(settled)return;settled=true;img.removeEventListener('load',onLoad);img.removeEventListener('error',onError);window.clearTimeout(timer);resolve(ok)};
-      const onLoad=()=>finish(img.naturalWidth>0);
-      const onError=()=>finish(false);
-      const timer=window.setTimeout(()=>finish(false),15000);
-      img.addEventListener('load',onLoad,{once:true});img.addEventListener('error',onError,{once:true});
-      if(img.complete)finish(img.naturalWidth>0);
-    });
-  }
+  const splash = document.getElementById('ao-splash');
+  if (!splash || splash.dataset.controller === 'final') return;
+  splash.dataset.controller = 'final';
+
+  let hydrationDone = document.documentElement.dataset.aoStorefrontHydrated === 'true';
+  let minimumTimeDone = false;
+  let dismissed = false;
+  let failSafe = 0;
+
   function dismiss(){
-    if(dismissed||!hydrationDone||!homepageSettingsDone||!homepageImagesApplied||!criticalImagesDone||!minimumTimeDone)return;
-    dismissed=true;if(failSafe)window.clearTimeout(failSafe);
-    splash.setAttribute('aria-busy','false');splash.setAttribute('aria-label','Ajay Outfits is ready');splash.classList.add('ao-splash-hide');
-    window.setTimeout(()=>{if(splash.parentNode)splash.parentNode.removeChild(splash)},650);
+    if (dismissed || !hydrationDone || !minimumTimeDone) return;
+    dismissed = true;
+    if (failSafe) window.clearTimeout(failSafe);
+    splash.setAttribute('aria-busy','false');
+    splash.setAttribute('aria-label','Ajay Outfits is ready');
+    splash.classList.add('ao-splash-hide');
+    window.setTimeout(function(){
+      if (splash.parentNode) splash.parentNode.removeChild(splash);
+    }, 650);
   }
-  function checkCriticalImages(){
-    if(!hydrationDone||!homepageSettingsDone||!homepageImagesApplied||imageWaitStarted)return;
-    imageWaitStarted=true;
-    const hero=document.querySelector('.hero-art>img');
-    const firstProducts=Array.from(document.querySelectorAll('#products .product-image img')).slice(0,4);
-    const journalImages=Array.from(document.querySelectorAll('#styleJournal .ao-section-image'));
-    const images=[hero,...firstProducts,...journalImages].filter(img=>img instanceof HTMLImageElement&&img.getAttribute('src'));
-    images.forEach(img=>{img.loading='eager';img.decoding='async';});
-    Promise.all(images.map(waitForImage)).then(results=>{
-      criticalImagesDone=true;
-      if(results.some(ok=>!ok))document.documentElement.dataset.aoCriticalImageLoad='partial';
-      else document.documentElement.dataset.aoCriticalImageLoad='complete';
-      dismiss();
-    });
-  }
-  function onHydrated(){hydrationDone=true;checkCriticalImages()}
-  if(!hydrationDone)document.addEventListener('ao:storefront-hydrated',onHydrated,{once:true});
-  window.addEventListener('ao:homepage-images-cloud-loaded',()=>{homepageSettingsDone=true;window.setTimeout(()=>{homepageImagesApplied=document.documentElement.dataset.aoHomepageImagesApplied==='true';checkCriticalImages()},0)},{once:true});
-  window.addEventListener('ao:homepage-images-applied',()=>{if(homepageSettingsDone){homepageImagesApplied=document.documentElement.dataset.aoHomepageImagesApplied==='true';checkCriticalImages()}},{once:true});
-  window.addEventListener('ao:homepage-images-cloud-failed',()=>{homepageSettingsDone=true;window.setTimeout(()=>{homepageImagesApplied=document.documentElement.dataset.aoHomepageImagesApplied==='true';checkCriticalImages()},0)},{once:true});
-  if(hydrationDone)checkCriticalImages();
-  if(homepageSettingsDone&&document.documentElement.dataset.aoHomepageImagesApplied==='true'){homepageImagesApplied=true;checkCriticalImages();}
-  window.setTimeout(()=>{minimumTimeDone=true;dismiss()},900);
-  // A bounded recovery prevents a broken/offline connection from trapping visitors on splash.
-  failSafe=window.setTimeout(()=>{
-    if(!homepageSettingsDone){homepageSettingsDone=true;document.documentElement.dataset.aoHomepageImagesCloudResolved='error';document.documentElement.classList.remove('ao-admin-images-pending');window.dispatchEvent(new Event('ao:homepage-images-cloud-failed'));}
-    if(!homepageImagesApplied){homepageImagesApplied=true;window.dispatchEvent(new Event('ao:homepage-images-applied'));}
-    if(!hydrationDone){hydrationDone=true;document.documentElement.dataset.aoStorefrontHydrated='error';document.documentElement.classList.remove('ao-cloud-hydrating');}
-    if(!criticalImagesDone){criticalImagesDone=true;document.documentElement.dataset.aoCriticalImageLoad='timeout';}
+
+  function onHydrated(){
+    hydrationDone = true;
     dismiss();
-  },20000);
+  }
+
+  if (hydrationDone) {
+    // Already hydrated by the time this controller runs.
+  } else {
+    document.addEventListener('ao:storefront-hydrated', onHydrated, { once:true });
+  }
+
+  // A short, consistent minimum display time avoids a flash on fast connections.
+  window.setTimeout(function(){
+    minimumTimeDone = true;
+    dismiss();
+  }, 1250);
+
+  // Never leave the opening screen blocking the storefront if cloud startup stalls.
+  failSafe = window.setTimeout(function(){
+    hydrationDone = true;
+    dismiss();
+  }, 12000);
 })();
 </script>
 
@@ -3654,8 +3628,7 @@ window.__aoStorefrontHydrationPromise=(async()=>{
       const setBg=(el,p)=>{if(!el||!p||!p.image)return;el.style.backgroundImage='linear-gradient(180deg,rgba(8,9,11,.08),rgba(8,9,11,.80)),url("'+cleanImage(p.image)+'")';};
       document.querySelectorAll('.market-card[data-collection]').forEach((el,i)=>setBg(el,usable[(i*3)%usable.length]));
       document.querySelectorAll('.release-card').forEach((el,i)=>setBg(el,usable[(i+1)%usable.length]));
-      // The AO Journal is managed by the Admin homepage-image slots below.
-      // Do not layer product-backed backgrounds underneath those saved images.
+      document.querySelectorAll('.editorial-card').forEach((el,i)=>setBg(el,usable[(i+2)%usable.length]));
     } catch(e) { /* Keep the built-in editorial imagery as a graceful fallback. */ }
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',applyAjayEditorialImages,{once:true});else applyAjayEditorialImages();
@@ -3785,13 +3758,13 @@ html:not([data-theme]) body :is(button,a,input,select,textarea):focus-visible, h
  ];
  const CLOUD_SETTINGS_ID='__ao_homepage_images__';
  const getSaved=()=>{try{return JSON.parse(stateStore.getItem('ao_sectionImages')||'{}')}catch{return {}}};
- // Public storefronts must wait for the cloud-published image set; localStorage may be stale.
  let saved={...(window.__aoHomepageImagesCloud||{})};
+ // Do not reveal browser-cached/default hero imagery before the Admin cloud settings resolve.
  // Dedicated Supabase Broadcast channel for homepage image settings. The database
  // row is still the durable source; Broadcast pushes the new URLs to already-open
  // customer and seller sessions immediately, without relying on row-level change
  // visibility for the private settings row.
- let aoHomepageImagesChannel=null,aoHomepageImagesChannelPromise=null;
+ let aoHomepageImagesChannel=null,aoHomepageImagesChannelPromise=null,aoHomepageImagesRetryTimer=null,aoHomepageImagesRetryDelay=3000;
  function applyIncomingHomepageImages(payload){
   const remote=payload&&payload.images;
   if(!remote||typeof remote!=='object'||Array.isArray(remote))return;
@@ -3803,6 +3776,7 @@ html:not([data-theme]) body :is(button,a,input,select,textarea):focus-visible, h
   const db=window.ajaySupabase;if(!db||typeof db.channel!=='function')return null;
   if(aoHomepageImagesChannel&&['joined','joining'].includes(String(aoHomepageImagesChannel.state||'').toLowerCase()))return aoHomepageImagesChannel;
   if(aoHomepageImagesChannelPromise)return aoHomepageImagesChannelPromise;
+  if(aoHomepageImagesChannel){try{db.removeChannel(aoHomepageImagesChannel)}catch(_){}aoHomepageImagesChannel=null;}
   aoHomepageImagesChannelPromise=new Promise(resolve=>{
    let settled=false;
    const finish=value=>{if(settled)return;settled=true;resolve(value)};
@@ -3810,11 +3784,11 @@ html:not([data-theme]) body :is(button,a,input,select,textarea):focus-visible, h
     const channel=db.channel('ao-homepage-images-live',{config:{broadcast:{self:false}}})
      .on('broadcast',{event:'homepage-images-updated'},message=>applyIncomingHomepageImages(message?.payload))
      .subscribe(status=>{
-      if(status==='SUBSCRIBED'){aoHomepageImagesChannel=channel;finish(channel)}
-      else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){console.warn('[Homepage images] Realtime channel status:',status);finish(null)}
+      if(status==='SUBSCRIBED'){if(aoHomepageImagesRetryTimer){clearTimeout(aoHomepageImagesRetryTimer);aoHomepageImagesRetryTimer=null}aoHomepageImagesRetryDelay=3000;aoHomepageImagesChannel=channel;finish(channel)}
+      else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){console.warn('[Homepage images] Realtime channel status:',status,'— retry scheduled');if(aoHomepageImagesChannel===channel)aoHomepageImagesChannel=null;try{db.removeChannel(channel)}catch(_){}finish(null);if(!aoHomepageImagesRetryTimer){const wait=aoHomepageImagesRetryDelay;aoHomepageImagesRetryDelay=Math.min(aoHomepageImagesRetryDelay*2,30000);aoHomepageImagesRetryTimer=setTimeout(()=>{aoHomepageImagesRetryTimer=null;ensureHomepageImagesChannel()},wait)}}
      });
     aoHomepageImagesChannel=channel;
-    setTimeout(()=>finish(null),9000);
+    setTimeout(()=>{if(!settled){finish(null);if(aoHomepageImagesChannel===channel)aoHomepageImagesChannel=null;try{db.removeChannel(channel)}catch(_){}if(!aoHomepageImagesRetryTimer){const wait=aoHomepageImagesRetryDelay;aoHomepageImagesRetryDelay=Math.min(aoHomepageImagesRetryDelay*2,30000);aoHomepageImagesRetryTimer=setTimeout(()=>{aoHomepageImagesRetryTimer=null;ensureHomepageImagesChannel()},wait)}}},9000);
    }catch(err){console.warn('[Homepage images] Could not start realtime channel:',err);finish(null)}
   }).finally(()=>{aoHomepageImagesChannelPromise=null});
   return aoHomepageImagesChannelPromise;
@@ -3824,8 +3798,9 @@ html:not([data-theme]) body :is(button,a,input,select,textarea):focus-visible, h
  window.addEventListener('ao:auth-change',()=>{ensureHomepageImagesChannel()});
  window.addEventListener('focus',()=>{if(!document.hidden)ensureHomepageImagesChannel()});
  function productFor(spec,index){if(spec.hero||typeof products==='undefined'||!products.length)return null;return products.find(p=>spec.match.some(m=>String(p.category||'').toLowerCase().includes(m.toLowerCase())||String(p.name||'').toLowerCase().includes(m.toLowerCase())))||products[index%products.length]||null}
- function imageFor(spec,index){if(document.documentElement.dataset.aoHomepageImagesCloudResolved==='error')return saved[spec.id]||'';return saved[spec.id]||(spec.hero?'':((productFor(spec,index)||{}).image)||'')}
- function applyImages(){slotSpecs.forEach((spec,i)=>{const card=$q(spec.selector);if(!card)return;const url=imageFor(spec,i);if(spec.hero){const heroImg=$q(':scope > img',card);if(heroImg){if(!heroImg.dataset.aoDefaultSrc)heroImg.dataset.aoDefaultSrc=heroImg.getAttribute('src')||'';heroImg.onerror=()=>{heroImg.hidden=true;heroImg.dataset.aoImageUnavailable='true';card.classList.add('ao-admin-image-error')};heroImg.onload=()=>{heroImg.hidden=false;delete heroImg.dataset.aoImageUnavailable;card.classList.remove('ao-admin-image-error')};if(!url){if(document.documentElement.dataset.aoHomepageImagesCloudResolved==='error'){heroImg.hidden=true;card.classList.add('ao-admin-image-error');return}const fallback=heroImg.dataset.aoDefaultSrc||'';if(fallback&&heroImg.getAttribute('src')!==fallback){heroImg.hidden=true;heroImg.setAttribute('src',fallback)}else if(heroImg.complete&&heroImg.naturalWidth>0){heroImg.hidden=false;card.classList.remove('ao-admin-image-error')}return}if((heroImg.getAttribute('src')||'')!==url){heroImg.hidden=true;heroImg.setAttribute('src',url)}else if(heroImg.complete&&heroImg.naturalWidth>0){heroImg.hidden=false;card.classList.remove('ao-admin-image-error')}else if(heroImg.complete){heroImg.hidden=true;card.classList.add('ao-admin-image-error')}}return;}let img=$q(':scope > .ao-section-image',card);if(!url){if(img)img.remove();card.classList.remove('ao-admin-image-error');return}if(!img){img=document.createElement('img');img.className='ao-section-image';img.alt='';img.loading='lazy';img.decoding='async';img.setAttribute('aria-hidden','true');card.prepend(img)}img.onerror=()=>{img.hidden=true;img.dataset.aoImageUnavailable='true';card.classList.add('ao-admin-image-error')};img.onload=()=>{img.hidden=false;delete img.dataset.aoImageUnavailable;card.classList.remove('ao-admin-image-error')};if((img.getAttribute('src')||'')!==url){img.hidden=true;img.setAttribute('src',url)}else if(img.complete&&img.naturalWidth>0){img.hidden=false;card.classList.remove('ao-admin-image-error')}else if(img.complete){img.hidden=true;card.classList.add('ao-admin-image-error')}});if(['true','error'].includes(document.documentElement.dataset.aoHomepageImagesCloudResolved||''))document.documentElement.dataset.aoHomepageImagesApplied='true';else delete document.documentElement.dataset.aoHomepageImagesApplied;window.dispatchEvent(new Event('ao:homepage-images-applied'))}
+ const HERO_DEFAULT_IMAGE='https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1000&q=85';
+ function imageFor(spec,index){return saved[spec.id]||(spec.hero?HERO_DEFAULT_IMAGE:((productFor(spec,index)||{}).image)||'')}
+ function applyImages(){slotSpecs.forEach((spec,i)=>{const card=$q(spec.selector);if(!card)return;const url=imageFor(spec,i);if(spec.hero){const heroImg=$q(':scope > img',card);if(heroImg){heroImg.onerror=()=>{heroImg.hidden=true;heroImg.dataset.aoImageUnavailable='true'};heroImg.onload=()=>{heroImg.hidden=false;delete heroImg.dataset.aoImageUnavailable};const target=url||HERO_DEFAULT_IMAGE;if((heroImg.getAttribute('src')||'')!==target){heroImg.hidden=true;heroImg.setAttribute('src',target)}else if(heroImg.complete&&heroImg.naturalWidth>0){heroImg.hidden=false}}return;}let img=$q(':scope > .ao-section-image',card);if(!url){if(img)img.remove();return}if(!img){img=document.createElement('img');img.className='ao-section-image';img.alt='';img.loading='lazy';img.decoding='async';img.setAttribute('aria-hidden','true');card.prepend(img)}img.onerror=()=>{img.hidden=true;img.dataset.aoImageUnavailable='true'};img.onload=()=>{img.hidden=false;delete img.dataset.aoImageUnavailable};if((img.getAttribute('src')||'')!==url){img.hidden=true;img.setAttribute('src',url)}else if(img.complete&&img.naturalWidth>0){img.hidden=false}})}
  function renderEditor(){const adminList=$q('#adminList');if(!adminList)return;let panel=$q('#aoSectionImageAdmin');if(!panel){panel=document.createElement('section');panel.id='aoSectionImageAdmin';panel.className='ao-section-image-admin';adminList.parentNode.insertBefore(panel,adminList.nextSibling)}
  panel.innerHTML='<h4>Homepage image management</h4><p>Manage the main homepage hero and images for collection, release and editorial cards. Add a public image URL or upload a PNG, JPG or WEBP file. Uploaded images are stored securely in the store media bucket and shared across the storefront.</p>'+slotSpecs.map((sp,i)=>`<div class="ao-image-edit-row" data-image-row="${sp.id}"><label for="ao-url-${sp.id}">${sp.label}</label><input id="ao-url-${sp.id}" type="url" placeholder="Public image URL (optional)" value="${escapeAttr(saved[sp.id]||'')}"><div class="ao-image-edit-actions"><input type="file" accept="image/png,image/jpeg,image/webp" aria-label="Upload image for ${sp.label}"><button class="chip" type="button" data-save-section-image="${sp.id}">Save image</button><button class="chip" type="button" data-clear-section-image="${sp.id}">${sp.hero?'Use default image':'Use product image'}</button></div></div>`).join('');
  }
@@ -3855,8 +3830,7 @@ html:not([data-theme]) body :is(button,a,input,select,textarea):focus-visible, h
  async function uploadImage(file,id){return uploadBlob(await compressFile(file),id)}
  async function migrateLegacyImages(localImages){if(!localImages||!Object.keys(localImages).length||!(typeof window.aoIsAdmin==='function'&&window.aoIsAdmin()))return;const migrated={};for(const [id,value] of Object.entries(localImages)){if(typeof value==='string'&&/^data:image\//i.test(value)){const blob=await (await fetch(value)).blob();migrated[id]=await uploadBlob(blob,id)}else if(typeof value==='string'&&value.trim())migrated[id]=value}await saveCloudSettings(migrated);if(typeof toast==='function')toast('Previous homepage images have been moved to shared cloud storage')}
  document.addEventListener('click',async e=>{const save=e.target.closest('[data-save-section-image]');const clear=e.target.closest('[data-clear-section-image]');if(!save&&!clear)return;const id=(save||clear).dataset[save?'saveSectionImage':'clearSectionImage'];const spec=slotSpecs.find(x=>x.id===id);if(!spec)return;const row=$q(`[data-image-row="${id}"]`);const button=save||clear;if(button.disabled)return;button.disabled=true;const oldLabel=button.textContent;button.textContent=clear?'Updating…':'Saving…';try{const next={...saved};if(clear){delete next[id];await saveCloudSettings(next);if(typeof toast==='function')toast(spec.hero?'Homepage hero image reset to default':'Homepage image reset to matching catalogue product')}else{const url=$q('input[type="url"]',row).value.trim();const file=$q('input[type="file"]',row).files?.[0];if(file)next[id]=await uploadImage(file,id);else if(url){let parsed;try{parsed=new URL(url)}catch(_){throw new Error('Enter a valid public image URL or choose an image file.')}if(!['http:','https:'].includes(parsed.protocol))throw new Error('Image URL must start with https:// or http://');next[id]=url}else delete next[id];await saveCloudSettings(next);if(typeof toast==='function')toast('Homepage image saved and shared with all visitors')} }catch(err){console.error('[Homepage images]',err);if(typeof toast==='function')toast(err.message||'Could not save homepage image');else alert(err.message)}finally{button.disabled=false;button.textContent=oldLabel}});
- const handleHomepageImagesCloudLoaded=e=>{const remote=e?.detail?.images??window.__aoHomepageImagesCloud;if(remote&&typeof remote==='object'&&!Array.isArray(remote)){const local=getSaved();const isAdmin=typeof window.aoIsAdmin==='function'&&window.aoIsAdmin();if(!window.__aoHomepageImagesCloudExists&&isAdmin&&Object.keys(local).length){saved={...local};applyImages();renderEditor();migrateLegacyImages(local).catch(err=>{console.warn('[Homepage images] Legacy image migration could not finish:',err);if(typeof toast==='function')toast('Previous local images remain on this browser. Check Storage permissions to share them.')});return}saved={...remote};try{stateStore.setItem('ao_sectionImages',JSON.stringify(saved))}catch(_){}applyImages();renderEditor();if(document.documentElement.dataset.aoHomepageImagesCloudResolved==='true')document.documentElement.classList.remove('ao-admin-images-pending')}};window.addEventListener('ao:homepage-images-cloud-loaded',handleHomepageImagesCloudLoaded);if(document.documentElement.dataset.aoHomepageImagesCloudResolved==='true')handleHomepageImagesCloudLoaded({detail:{images:window.__aoHomepageImagesCloud||{}}});
- window.addEventListener('ao:homepage-images-cloud-failed',()=>{applyImages();renderEditor();document.documentElement.classList.remove('ao-admin-images-pending')},{once:true});
+ window.addEventListener('ao:homepage-images-cloud-loaded',e=>{const remote=e.detail?.images;if(remote&&typeof remote==='object'){const local=getSaved();if(!window.__aoHomepageImagesCloudExists&&Object.keys(local).length){saved={...local};applyImages();renderEditor();migrateLegacyImages(local).catch(err=>{console.warn('[Homepage images] Legacy image migration could not finish:',err);if(typeof toast==='function')toast('Previous local images remain on this browser. Check Storage permissions to share them.')});return}saved={...remote};try{stateStore.setItem('ao_sectionImages',JSON.stringify(saved))}catch(_){}applyImages();renderEditor();if(document.documentElement.dataset.aoHomepageImagesCloudResolved==='true')document.documentElement.classList.remove('ao-admin-images-pending')}});
  // Re-render image editor whenever Admin opens or catalogue updates; wrap existing admin refresh without changing its behaviour.
  if(typeof updateAdmin==='function'){const originalUpdateAdmin=updateAdmin;window.updateAdmin=function(){originalUpdateAdmin();renderEditor()}}
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{applyImages();renderEditor();if(document.documentElement.dataset.aoHomepageImagesCloudResolved==='true')document.documentElement.classList.remove('ao-admin-images-pending')});else{applyImages();renderEditor();if(document.documentElement.dataset.aoHomepageImagesCloudResolved==='true')document.documentElement.classList.remove('ao-admin-images-pending')}
@@ -4605,12 +4579,9 @@ body.ao-dashboard-page-mode{overflow:hidden}body.ao-dashboard-page-mode>.wrap,bo
   if(typeof aoLoadRole==='function')await aoLoadRole();
   if(kind==='admin'&&!(typeof aoIsAdmin==='function'&&aoIsAdmin())){if(typeof toast==='function')toast('Administrator access required');return;}
   if(kind==='seller'&&!(typeof aoCanSell==='function'&&aoCanSell())){if(typeof toast==='function')toast('Seller access required');return;}
-  // Return any previously moved dashboard box before looking it up again.
-  // This prevents a repeat navigation from reporting a false missing-modal-content error.
-  if(activePage)closePage(true);
   // Open from the current in-memory snapshot first; render large lists after the frame is painted.
   const modalId=kind==='admin'?'adminModal':'sellerDashboardModal',modal=$('#'+modalId);if(!modal){console.error('Missing dashboard modal:',modalId);return;}const box=modal.querySelector('.modalbox');if(!box){console.error('Missing dashboard content:',modalId);return;}
-  const page=ensurePage();originalParent=box.parentNode;originalNext=box.nextSibling;movedBox=box;const content=$('#aoStandaloneContent');content.replaceChildren();content.appendChild(box);modal.classList.remove('show');modal.setAttribute('aria-hidden','true');box.classList.add('ao-moved-page-box');activePage=kind;$('#aoStandaloneTitle').textContent=kind==='admin'?'Store management':'Seller dashboard';$('#aoStandaloneSubtitle').textContent=kind==='admin'?'Manage the whole store: catalogue, seller approvals, homepage content and system settings.':'Your listings, stock, assigned customer orders and fulfilment updates.';page.classList.toggle('ao-store-management-page',kind==='admin');page.classList.add('show');document.body.classList.add('ao-dashboard-page-mode');history.pushState({aoPage:kind},'', '#ao-page-'+kind);window.scrollTo({top:0,behavior:'auto'});requestAnimationFrame(()=>{if(activePage!==kind)return;if(kind==='admin'&&typeof updateAdmin==='function')updateAdmin();if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();if(typeof renderSellerDashboard==='function')renderSellerDashboard();});if(typeof hydrateAjayDataFromSupabase==='function'){hydrateAjayDataFromSupabase().then(()=>{if(activePage!==kind)return;if(kind==='admin'&&typeof updateAdmin==='function')updateAdmin();if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();if(typeof renderSellerDashboard==='function')renderSellerDashboard();}).catch(err=>console.warn('Background dashboard refresh failed:',err));}
+  if(activePage)closePage(true);const page=ensurePage();originalParent=box.parentNode;originalNext=box.nextSibling;movedBox=box;const content=$('#aoStandaloneContent');content.replaceChildren();content.appendChild(box);modal.classList.remove('show');modal.setAttribute('aria-hidden','true');box.classList.add('ao-moved-page-box');activePage=kind;$('#aoStandaloneTitle').textContent=kind==='admin'?'Store management':'Seller dashboard';$('#aoStandaloneSubtitle').textContent=kind==='admin'?'Manage the whole store: catalogue, seller approvals, homepage content and system settings.':'Your listings, stock, assigned customer orders and fulfilment updates.';page.classList.toggle('ao-store-management-page',kind==='admin');page.classList.add('show');document.body.classList.add('ao-dashboard-page-mode');history.pushState({aoPage:kind},'', '#ao-page-'+kind);window.scrollTo({top:0,behavior:'auto'});requestAnimationFrame(()=>{if(activePage!==kind)return;if(kind==='admin'&&typeof updateAdmin==='function')updateAdmin();if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();if(typeof renderSellerDashboard==='function')renderSellerDashboard();});if(typeof hydrateAjayDataFromSupabase==='function'){hydrateAjayDataFromSupabase().then(()=>{if(activePage!==kind)return;if(kind==='admin'&&typeof updateAdmin==='function')updateAdmin();if(typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();if(typeof renderSellerDashboard==='function')renderSellerDashboard();}).catch(err=>console.warn('Background dashboard refresh failed:',err));}
  }catch(err){console.error('Dashboard could not open:',err);if(typeof toast==='function')toast('Dashboard could not open. Check the browser console for the error.');}}
  window.aoOpenSellerDashboardPage=()=>openPage('seller');
  function openOrdersPage(){if(typeof aoLoadRole==='function')return aoLoadRole().then(async()=>{const staff=(typeof aoIsAdmin==='function'&&aoIsAdmin())||(typeof aoCanSell==='function'&&aoCanSell());if(!staff){if(typeof openModal==='function')openModal('aoOrdersModal');return;}if(activePage)closePage(true);const page=ensurePage();const content=$('#aoStandaloneContent');const adminMode=typeof aoIsAdmin==='function'&&aoIsAdmin(),ordersTitle='Customer Orders';content.innerHTML='<section class="ao-orders-workspace"><span class="eyebrow">AJAY OUTFITS · ORDER CENTRE</span><h2 style="margin:8px 0">'+ordersTitle+'</h2><p style="color:var(--muted)">'+(adminMode?'Track customer orders across the store, update fulfilment and payment status, and access receipts for completed orders.':'Review orders containing your products, update the fulfilment steps available to your seller account, and access relevant receipts.')+'</p><div id="aoStandaloneOrdersLive" data-ao-order-role="'+(adminMode?'admin':'seller')+'" class="admin-list"></div></section>';movedBox=null;originalParent=null;activePage='orders';$('#aoStandaloneTitle').textContent=ordersTitle;$('#aoStandaloneSubtitle').textContent=adminMode?'All customer orders, fulfilment and receipts.':'Your shop orders, fulfilment and receipts.';page.classList.add('show');document.body.classList.add('ao-dashboard-page-mode');history.pushState({aoPage:'orders'},'', '#ao-page-orders');requestAnimationFrame(()=>{if(activePage==='orders'&&typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();});if(typeof hydrateAjayDataFromSupabase==='function')hydrateAjayDataFromSupabase().then(()=>{if(activePage==='orders'&&typeof window.aoRenderStaffOrders==='function')window.aoRenderStaffOrders();}).catch(err=>console.warn('Background orders refresh failed:',err));});}
@@ -6841,12 +6812,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 #aoAdminProductReviewsList .ao-notification-target-order,#aoSellerReviewInbox .ao-notification-target-order{background:var(--soft)!important}
 #aoSellerDecisionResultModal .modalbox.ao-notification-destination-focus{outline:2px solid var(--accent,var(--ink,#17191d));outline-offset:3px;box-shadow:0 0 0 5px color-mix(in srgb,var(--accent,var(--ink,#17191d)) 14%,transparent),var(--shadow,0 18px 60px rgba(0,0,0,.18))}
 @media(prefers-reduced-motion:reduce){#adminModal .ao-notification-target-order,#sellerDashboardModal .ao-notification-target-order,#aoStandaloneDashboard .ao-notification-target-order,#aoAdminProductReviewsList .ao-notification-target-order,#aoSellerReviewInbox .ao-notification-target-order,#sellerStatus.ao-notification-target-order{transition:none!important}}
-</style>
-<style id="ao-admin-image-failure-state">
-.editorial-card.ao-admin-image-error{background:var(--soft)!important}
-.editorial-card.ao-admin-image-error:after{background:transparent!important}
-.editorial-card.ao-admin-image-error .eyebrow,.editorial-card.ao-admin-image-error h3,.editorial-card.ao-admin-image-error p,.editorial-card.ao-admin-image-error button{color:var(--ink)!important;text-shadow:none!important}
-.hero-art.ao-admin-image-error{background:var(--soft)!important}
 </style>
 
 <style id="ao-multi-seller-order-tabs-v1">
